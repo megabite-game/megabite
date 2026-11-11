@@ -1,4 +1,8 @@
+<p align="center"><img src=".claude-plugin/icon.png" width="128" alt="MegaBite icon: a fish biting a hook"></p>
+
 # MegaBite
+
+<p align="center"><img src="docs/demo.svg" alt="MegaBite in a pane while Claude works: cast, a bite, a fight with a Goliath Grouper, a record catch as Claude finishes"></p>
 
 A small fishing game that lives in a pane beside your Claude Code chat, for the moments you're waiting on Claude. Cast, set the hook, reel in, and build a collection of 50 real fish across five rarity tiers. Your catches are saved on your machine across sessions, and the game flashes (and, if you unmute it, chimes) when Claude finishes.
 
@@ -63,6 +67,8 @@ claude plugin validate /path/to/megabite
 ```
 
 Type checking needs the plugin API's types, which Claude Code writes to `.claude-plugin/types/` (not committed) when it loads the plugin from this folder. Run `claude --plugin-dir .` once, then `npx tsc -p .`.
+
+The demo at the top is drawn by the game's own code: `node scripts/demo/render.mjs` rewrites `docs/demo.svg` (Node 24 or later).
 
 Pull requests are welcome.
 
