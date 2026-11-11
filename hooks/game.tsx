@@ -52,7 +52,13 @@ const SLACK_LIMIT = 20
 const SHAKE_WARNING = 5
 
 // Rarer fish head-shake more often (chance per tick), and a missed shake is likelier to snap the line.
-const SHAKE_CHANCE: Record<Rarity, number> = { common: 0.001, uncommon: 0.004, rare: 0.008, epic: 0.012, legendary: 0.015 }
+const SHAKE_CHANCE: Record<Rarity, number> = {
+  common: 0.001,
+  uncommon: 0.004,
+  rare: 0.008,
+  epic: 0.012,
+  legendary: 0.015,
+}
 const SHAKE_SNAP: Record<Rarity, number> = { common: 0.2, uncommon: 0.3, rare: 0.4, epic: 0.5, legendary: 0.6 }
 
 const RARITY_COLOR: Record<Rarity, string> = {
@@ -71,7 +77,8 @@ const SCENE_ROWS = 5
 const SURFACE = 2
 const TIP = { r: 0, c: 6 }
 
-// Props reach the module on each call; the timer and key listener read the newest from here.
+// Props reach the module on each call; the timer and key listener were set up once, on the first call,
+// so they read the newest props from here instead of the stale ones they closed over. Keyed by surface.
 const latest = new WeakMap<object, GameProps>()
 // The Claude-done count each game last saw, and the tick its flash ends.
 const doneSeen = new WeakMap<object, { count: number; flashUntil: number }>()
@@ -154,11 +161,11 @@ const press = (surface: ClientSurface<State>): void => {
         progress: 0,
         slackTicks: 0,
         runTicks: 0,
-  runCooldown: 0,
-  wear: 0,
-  shakeWarn: 0,
-  shakeDodged: false,
-  shakeCooldown: 0,
+        runCooldown: 0,
+        wear: 0,
+        shakeWarn: 0,
+        shakeDodged: false,
+        shakeCooldown: 0,
         fishId: props?.hooked?.id ?? s.fishId,
       })
       return
@@ -179,21 +186,34 @@ const tick = (surface: ClientSurface<State>): void => {
     case 'idle':
     case 'landed':
     case 'lost':
-      // Waves only; a slower redraw while nothing is happening.
+      // Waves only; a slower redraw while nothing is happening. On skipped ticks the count is bumped in place,
+      // without setState, so the pane does not redraw.
       if (t % 3 === 0) surface.setState({ ...s, tick: t })
       else s.tick = t
       return
     case 'charging': {
       let power = s.power + s.powerDir * 0.05
       let powerDir = s.powerDir
-      if (power >= 1) (power = 1), (powerDir = -1)
-      if (power <= 0) (power = 0), (powerDir = 1)
+      if (power >= 1) {
+        power = 1
+        powerDir = -1
+      }
+      if (power <= 0) {
+        power = 0
+        powerDir = 1
+      }
       surface.setState({ ...s, tick: t, power, powerDir })
       return
     }
     case 'flying':
       if (t - s.castAt >= FLIGHT_TICKS) {
-        surface.setState({ ...s, tick: t, phase: 'waiting', landAt: t, biteAt: t + 20 + Math.floor(Math.random() * 60) })
+        surface.setState({
+          ...s,
+          tick: t,
+          phase: 'waiting',
+          landAt: t,
+          biteAt: t + 20 + Math.floor(Math.random() * 60),
+        })
       } else surface.setState({ ...s, tick: t })
       return
     case 'waiting':
@@ -239,7 +259,12 @@ const tick = (surface: ClientSurface<State>): void => {
           shakeDodged = false
           shakeCooldown = 25
         }
-      } else if (shakeCooldown === 0 && runTicks === 0 && t - s.hookedAt > HOOK_FLASH && Math.random() < SHAKE_CHANCE[rarity]) {
+      } else if (
+        shakeCooldown === 0 &&
+        runTicks === 0 &&
+        t - s.hookedAt > HOOK_FLASH &&
+        Math.random() < SHAKE_CHANCE[rarity]
+      ) {
         shakeWarn = SHAKE_WARNING
         shakeDodged = false
       }
@@ -268,7 +293,20 @@ const tick = (surface: ClientSurface<State>): void => {
         if (fishId) surface.post({ type: 'land', id: fishId })
         surface.setState({ ...s, tick: t, phase: 'landed', progress, landedId: fishId })
       } else {
-        surface.setState({ ...s, tick: t, tension: clamp(tension, 0, 120), progress, slackTicks, runTicks, runCooldown, wear, shakeWarn, shakeDodged, shakeCooldown, fishId })
+        surface.setState({
+          ...s,
+          tick: t,
+          tension: clamp(tension, 0, 120),
+          progress,
+          slackTicks,
+          runTicks,
+          runCooldown,
+          wear,
+          shakeWarn,
+          shakeDodged,
+          shakeCooldown,
+          fishId,
+        })
       }
       return
     }
@@ -315,13 +353,15 @@ const scene = (s: State, props: GameProps, width: number): Segment[][] => {
   )
   const put = (r: number, c: number, text: string, color?: string, bold?: boolean): void => {
     for (let i = 0; i < text.length; i++) {
-      if (r >= 0 && r < SCENE_ROWS && c + i >= 0 && c + i < width) rows[r][c + i] = { text: text[i], color, bold, bg: bgFor(r, c + i) }
+      if (r >= 0 && r < SCENE_ROWS && c + i >= 0 && c + i < width)
+        rows[r][c + i] = { text: text[i], color, bold, bg: bgFor(r, c + i) }
     }
   }
   // A line between two cells, ends excluded; `gap` 2 draws every other cell so a long line stays light.
   const line = (r0: number, c0: number, r1: number, c1: number, ch: string, color: string, gap = 2): void => {
     const steps = Math.max(Math.abs(r1 - r0), Math.abs(c1 - c0))
-    for (let i = 1; i < steps; i += gap) put(Math.round(r0 + ((r1 - r0) * i) / steps), Math.round(c0 + ((c1 - c0) * i) / steps), ch, color)
+    for (let i = 1; i < steps; i += gap)
+      put(Math.round(r0 + ((r1 - r0) * i) / steps), Math.round(c0 + ((c1 - c0) * i) / steps), ch, color)
   }
   const t = s.tick
   const bottom = SCENE_ROWS - 1
@@ -345,7 +385,7 @@ const scene = (s: State, props: GameProps, width: number): Segment[][] => {
   const isFighting = s.phase === 'bite' || s.phase === 'reeling'
   if (!isFighting) {
     const span = Math.max(1, width - DOCK - 4)
-    const d = (Math.floor(t / 5)) % (span * 2)
+    const d = Math.floor(t / 5) % (span * 2)
     put(bottom, DOCK + (d < span ? d : span * 2 - d), d < span ? '><>' : '<><', '#81d4fa')
   }
 
@@ -430,7 +470,13 @@ const scene = (s: State, props: GameProps, width: number): Segment[][] => {
     line(tip.r, tip.c, SURFACE, fx, lineChar, lineColor, lineChar === '━' ? 1 : 2)
     put(SURFACE, fx, '|', lineColor, true)
     const sprite = isRunning ? fleeing : toDock
-    put(isRunning ? bottom : SURFACE + 1, isRunning ? fx : fx - Math.floor(sprite.length / 2), sprite, isRunning ? '#ffab91' : '#ffffff', true)
+    put(
+      isRunning ? bottom : SURFACE + 1,
+      isRunning ? fx : fx - Math.floor(sprite.length / 2),
+      sprite,
+      isRunning ? '#ffab91' : '#ffffff',
+      true,
+    )
     if (isRunning) put(SURFACE, fx - 1, t % 2 ? '*~*' : '~*~', '#ffffff', true)
     if (s.shakeWarn > 0) put(SURFACE - 1, fx, '↯', '#ffeb3b', true)
     if (t - s.hookedAt < HOOK_FLASH) put(1, fx - 1, t % 2 ? '\\|/' : '/|\\', '#ffffff', true)
@@ -441,14 +487,21 @@ const scene = (s: State, props: GameProps, width: number): Segment[][] => {
 
 const bar = (value: number, width: number, color: string): Segment[] => {
   const filled = Math.round(clamp(value, 0, 1) * width)
-  return [{ text: '█'.repeat(filled), color }, { text: '░'.repeat(width - filled), color: '#455a64' }]
+  return [
+    { text: '█'.repeat(filled), color },
+    { text: '░'.repeat(width - filled), color: '#455a64' },
+  ]
 }
 
 const tensionGauge = (tension: number, width: number): Segment[] => {
   const marker = Math.min(width - 1, Math.floor((clamp(tension, 0, 100) / 100) * width))
   const cells: Segment[] = []
   for (let i = 0; i < width; i++) {
-    cells.push(i === marker ? { text: '◆', color: '#ffffff', bold: true } : { text: '━', color: tensionColor((i / width) * 100) })
+    cells.push(
+      i === marker
+        ? { text: '◆', color: '#ffffff', bold: true }
+        : { text: '━', color: tensionColor((i / width) * 100) },
+    )
   }
   return runs(cells)
 }
@@ -477,7 +530,12 @@ const wearMarks = (wear: number, t: number): Segment[] =>
         : [{ text: ' !!!', color: t % 4 < 2 ? '#e53935' : '#ff8a80', bold: true }]
 
 // A key cap; lit in a colour when it is the key to press now.
-const chip = (label: string, lit?: string): Segment => ({ text: ` ${label} `, color: lit ? '#ffffff' : '#263238', bg: lit ?? '#cfd8dc', bold: true })
+const chip = (label: string, lit?: string): Segment => ({
+  text: ` ${label} `,
+  color: lit ? '#ffffff' : '#263238',
+  bg: lit ?? '#cfd8dc',
+  bold: true,
+})
 const dim = (text: string): Segment => ({ text, color: '#78909c' })
 
 // Same format as fish.ts's formatWeight / formatLength, which the commands use.
@@ -487,7 +545,8 @@ const formatLength = (inches: number): string => `${inches.toFixed(1)} in`
 // A coloured tag for a fish that is big for its species; nothing for an ordinary one.
 const GRADE_TAG: Record<SizeGrade, string> = { big: 'BIG', trophy: 'TROPHY', record: '★ RECORD' }
 const GRADE_COLOR: Record<SizeGrade, string> = { big: '#ff8a65', trophy: '#ff5722', record: '#ff1744' }
-const gradeTag = (grade: SizeGrade | null): Segment[] => (grade ? [{ text: `${GRADE_TAG[grade]} `, color: GRADE_COLOR[grade], bold: true }] : [])
+const gradeTag = (grade: SizeGrade | null): Segment[] =>
+  grade ? [{ text: `${GRADE_TAG[grade]} `, color: GRADE_COLOR[grade], bold: true }] : []
 
 type Hud = { line: Segment[]; accent: string }
 
@@ -497,17 +556,28 @@ const hud = (s: State, props: GameProps | undefined, width: number): Hud => {
   const half = Math.max(8, Math.floor((width - 10) / 2))
   switch (s.phase) {
     case 'idle':
-      return { accent: '#546e7a', line: [SPACE, dim(' cast  '), chip('tab'), dim(' records  '), chip('esc'), dim(' close')] }
+      return {
+        accent: '#546e7a',
+        line: [SPACE, dim(' cast  '), chip('tab'), dim(' records  '), chip('esc'), dim(' close')],
+      }
     case 'charging':
       return {
         accent: '#ffb300',
-        line: [SPACE, { text: ' ' }, ...bar(s.power, half * 2 - 4, s.power > 0.8 ? '#ff7043' : '#ffca28'), { text: ` ${castFeet(s.power)}ft`, bold: true }],
+        line: [
+          SPACE,
+          { text: ' ' },
+          ...bar(s.power, half * 2 - 4, s.power > 0.8 ? '#ff7043' : '#ffca28'),
+          { text: ` ${castFeet(s.power)}ft`, bold: true },
+        ],
       }
     case 'flying':
       return { accent: '#ffb300', line: [dim(`→ ${castFeet(s.distance)}ft`)] }
     case 'waiting': {
       const isClose = s.biteAt - t < 15
-      return { accent: '#42a5f5', line: [isClose ? { text: '…', color: '#ffca28', bold: true } : dim('·'.repeat(1 + (Math.floor(t / 5) % 3)))] }
+      return {
+        accent: '#42a5f5',
+        line: [isClose ? { text: '…', color: '#ffca28', bold: true } : dim('·'.repeat(1 + (Math.floor(t / 5) % 3)))],
+      }
     }
     case 'bite':
       return {
@@ -524,10 +594,30 @@ const hud = (s: State, props: GameProps | undefined, width: number): Hud => {
       const d = props?.hooked?.difficulty ?? 0.5
       const isRunning = s.runTicks > 0
       return {
-        accent: s.shakeWarn > 0 ? (t % 2 ? '#ffeb3b' : '#ff6f00') : t - s.hookedAt < HOOK_FLASH ? '#66bb6a' : isRunning ? (t % 4 < 2 ? '#ff5252' : '#ff8a80') : tensionColor(s.tension),
+        accent:
+          s.shakeWarn > 0
+            ? t % 2
+              ? '#ffeb3b'
+              : '#ff6f00'
+            : t - s.hookedAt < HOOK_FLASH
+              ? '#66bb6a'
+              : isRunning
+                ? t % 4 < 2
+                  ? '#ff5252'
+                  : '#ff8a80'
+                : tensionColor(s.tension),
         line: [
           ...(s.shakeWarn > 0 ? [{ text: '↯', color: t % 2 ? '#ffeb3b' : '#ff6f00', bold: true }] : [{ text: ' ' }]),
-          chip('←', s.shakeWarn > 0 ? '#f57f17' : s.tension >= ZONE_HIGH - 10 || isRunning ? (t % 4 < 2 ? '#e53935' : '#ff8a80') : undefined),
+          chip(
+            '←',
+            s.shakeWarn > 0
+              ? '#f57f17'
+              : s.tension >= ZONE_HIGH - 10 || isRunning
+                ? t % 4 < 2
+                  ? '#e53935'
+                  : '#ff8a80'
+                : undefined,
+          ),
           { text: ' ' },
           ...tensionGauge(s.tension, Math.max(8, half - 6)),
           { text: ' ' },
@@ -616,7 +706,8 @@ const Game: ClientModule<GameProps, State> = (props, surface) => {
   // A new Claude-done count starts a 3-second flash; the first one seen is just a baseline.
   const seen = doneSeen.get(surface)
   if (!seen) doneSeen.set(surface, { count: props.claudeDoneCount, flashUntil: 0 })
-  else if (props.claudeDoneCount !== seen.count) doneSeen.set(surface, { count: props.claudeDoneCount, flashUntil: s.tick + 30 })
+  else if (props.claudeDoneCount !== seen.count)
+    doneSeen.set(surface, { count: props.claudeDoneCount, flashUntil: s.tick + 30 })
   const isFlashing = (doneSeen.get(surface)?.flashUntil ?? 0) > s.tick
   const panel: Hud = s.view === 'fish' ? hud(s, props, width) : { accent: VIEW_TAB[s.view].color, line: tabBar(s.view) }
 
@@ -631,8 +722,18 @@ const Game: ClientModule<GameProps, State> = (props, surface) => {
   )
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={isFlashing ? (s.tick % 4 < 2 ? '#66bb6a' : '#b9f6ca') : panel.accent} paddingX={1}>
-      {(s.view === 'rare' ? listRows(props.rare, width) : s.view === 'heavy' ? listRows(props.heavy, width) : scene(s, props, width)).map(row)}
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={isFlashing ? (s.tick % 4 < 2 ? '#66bb6a' : '#b9f6ca') : panel.accent}
+      paddingX={1}
+    >
+      {(s.view === 'rare'
+        ? listRows(props.rare, width)
+        : s.view === 'heavy'
+          ? listRows(props.heavy, width)
+          : scene(s, props, width)
+      ).map(row)}
       <Box flexDirection="row" justifyContent="space-between">
         {row(panel.line)}
         {props.isClaudeBusy ? (

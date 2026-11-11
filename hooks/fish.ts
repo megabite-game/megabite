@@ -24,7 +24,16 @@ const fish = (
   weightLb: number,
   maxLengthIn: number,
   fight: number,
-): Species => ({ id: name.toLowerCase().replace(/[^a-z]+/g, '-'), name, rarity, habitat, lengthIn, weightLb, maxLengthIn, fight })
+): Species => ({
+  id: name.toLowerCase().replace(/[^a-z]+/g, '-'),
+  name,
+  rarity,
+  habitat,
+  lengthIn,
+  weightLb,
+  maxLengthIn,
+  fight,
+})
 
 // Rarity follows how often an angler meets the fish in real life.
 export const SPECIES: readonly Species[] = [
@@ -107,8 +116,7 @@ const TROPHY_CHANCE = 0.04
 export type Random = () => number
 
 // Standard normal from two uniforms (Box-Muller).
-const gaussian = (random: Random): number =>
-  Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random())
+const gaussian = (random: Random): number => Math.sqrt(-2 * Math.log(1 - random())) * Math.cos(2 * Math.PI * random())
 
 const round = (value: number, places: number): number => {
   const factor = 10 ** places
@@ -174,7 +182,7 @@ export const sizeGrade = (speciesId: string, weightLb: number): SizeGrade | null
   return null
 }
 
-const GRADE_LABEL: Record<SizeGrade, string> = { big: 'BIG', trophy: 'TROPHY', record: '★ RECORD' }
+export const GRADE_LABEL: Record<SizeGrade, string> = { big: 'BIG', trophy: 'TROPHY', record: '★ RECORD' }
 
 const gradeSuffix = (grade: SizeGrade | null): string => (grade ? `  ${GRADE_LABEL[grade]}` : '')
 
@@ -207,13 +215,25 @@ export const toSave = (value: unknown): Save => {
   // Rebuild the top list from both lists so a dropped entry is refilled from recent catches.
   const pool = new Map([...(stored.top ?? []), ...recent].filter(isKnown).map(one => [one.id, one]))
   const top = [...pool.values()].sort(byWeight).slice(0, TOP_LIMIT)
-  const species = Object.fromEntries(Object.entries(stored.species ?? {}).filter(([id]) => SPECIES.some(one => one.id === id)))
+  const species = Object.fromEntries(
+    Object.entries(stored.species ?? {}).filter(([id]) => SPECIES.some(one => one.id === id)),
+  )
   const biggest = stored.biggest && isKnown(stored.biggest) ? stored.biggest : (top[0] ?? null)
   // Counts follow the species kept; weight is trimmed by what the dropped recent catches weighed.
   const totalCaught = Object.values(species).reduce((sum, one) => sum + one.count, 0)
   const droppedWeight = (stored.recent ?? []).filter(one => !isKnown(one)).reduce((sum, one) => sum + one.weightLb, 0)
   const totalWeightLb = round(Math.max(0, (stored.totalWeightLb ?? 0) - droppedWeight), 2)
-  return { ...EMPTY_SAVE, ...stored, recent, top, species, biggest, totalCaught, totalWeightLb, seenGrades: stored.seenGrades ?? [] }
+  return {
+    ...EMPTY_SAVE,
+    ...stored,
+    recent,
+    top,
+    species,
+    biggest,
+    totalCaught,
+    totalWeightLb,
+    seenGrades: stored.seenGrades ?? [],
+  }
 }
 
 export const recordCatch = (save: Save, fish: Catch): Save => {
@@ -249,7 +269,8 @@ const tierName = (rarity: Rarity): string => rarity[0].toUpperCase() + rarity.sl
 // What a catch earned, biggest news first; empty when it was nothing new.
 export const catchNews = (before: Save, fish: Catch): string | null => {
   const prior = before.species[fish.species]
-  if (before.biggest === null || fish.weightLb > before.biggest.weightLb) return `MegaBite record: ${fish.name}, ${formatWeight(fish.weightLb)}!`
+  if (before.biggest === null || fish.weightLb > before.biggest.weightLb)
+    return `MegaBite record: ${fish.name}, ${formatWeight(fish.weightLb)}!`
   if (!prior) return `New species: ${fish.name} (${tierName(fish.rarity)})`
   if (fish.weightLb > prior.bestWeightLb) return `Personal best: ${fish.name}, ${formatWeight(fish.weightLb)}`
   return null
@@ -284,7 +305,9 @@ export const formatDex = (save: Save): string => {
     for (const one of inTier) {
       const best = save.species[one.id]
       if (best) {
-        lines.push(`  ${one.name.padEnd(NAME_WIDTH)}${formatWeight(best.bestWeightLb).padStart(10)}${formatLength(best.bestLengthIn).padStart(9)}   ${best.count} caught`)
+        lines.push(
+          `  ${one.name.padEnd(NAME_WIDTH)}${formatWeight(best.bestWeightLb).padStart(10)}${formatLength(best.bestLengthIn).padStart(9)}   ${best.count} caught`,
+        )
       }
     }
     // Names stay hidden; where they live is the hint (short casts find shore fish, long casts deep ones).
@@ -316,7 +339,9 @@ export const formatStats = (save: Save): string => {
   const rare = rarest(save)
   return [
     `Caught ${save.totalCaught} (${save.totalEscaped} got away), ${formatWeight(save.totalWeightLb)} in all.`,
-    save.biggest ? `Heaviest: ${save.biggest.name}, ${formatWeight(save.biggest.weightLb)}, ${formatLength(save.biggest.lengthIn)}.` : 'Heaviest: none yet.',
+    save.biggest
+      ? `Heaviest: ${save.biggest.name}, ${formatWeight(save.biggest.weightLb)}, ${formatLength(save.biggest.lengthIn)}.`
+      : 'Heaviest: none yet.',
     rare ? `Rarest: ${rare.name} (${tierName(rare.rarity)}).` : 'Rarest: none yet.',
     `Species: ${speciesFound(save)}/${SPECIES.length}. More: /fish dex, /fish top, /fish rare, /fish help.`,
   ].join('\n')
@@ -327,7 +352,14 @@ export const rarestList = (save: Save, limit: number): RareEntry[] =>
   SPECIES.filter(one => save.species[one.id])
     .map(one => {
       const best = save.species[one.id]
-      return { name: one.name, rarity: one.rarity, weightLb: best.bestWeightLb, lengthIn: best.bestLengthIn, count: best.count, grade: sizeGrade(one.id, best.bestWeightLb) }
+      return {
+        name: one.name,
+        rarity: one.rarity,
+        weightLb: best.bestWeightLb,
+        lengthIn: best.bestLengthIn,
+        count: best.count,
+        grade: sizeGrade(one.id, best.bestWeightLb),
+      }
     })
     .sort((a, b) => TIER_ORDER.indexOf(b.rarity) - TIER_ORDER.indexOf(a.rarity) || b.weightLb - a.weightLb)
     .slice(0, limit)
@@ -337,9 +369,8 @@ export const formatRare = (save: Save): string => {
   if (list.length === 0) return 'MegaBite rarest: nothing landed yet.'
   return [
     'MegaBite rarest catches (your best of each species)',
-    ...list.map(
-      one =>
-        `  ${tierName(one.rarity).padEnd(10)}${one.name.padEnd(NAME_WIDTH)}${formatWeight(one.weightLb).padStart(10)}${formatLength(one.lengthIn).padStart(9)}   ${`${one.count} caught`.padEnd(9)}${gradeSuffix(one.grade)}`.trimEnd(),
+    ...list.map(one =>
+      `  ${tierName(one.rarity).padEnd(10)}${one.name.padEnd(NAME_WIDTH)}${formatWeight(one.weightLb).padStart(10)}${formatLength(one.lengthIn).padStart(9)}   ${`${one.count} caught`.padEnd(9)}${gradeSuffix(one.grade)}`.trimEnd(),
     ),
   ].join('\n')
 }

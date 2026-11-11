@@ -79,7 +79,7 @@ export type GameProps = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'megabite': {
+    megabite: {
       save: Shaped<Save>
       hooked: Shaped<Hooked | null>
       last: Shaped<Catch | null>

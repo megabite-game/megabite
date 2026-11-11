@@ -1,7 +1,25 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { Hooked } from '../types'
-import { addCatchToOuting, catchNews, EMPTY_OUTING, EMPTY_SAVE, formatOuting, formatDex, formatHelp, formatRare, formatTop, gradeIntro, sizeGrade, pickSpecies, rarest, recordCatch, rollFish, SPECIES, toSave } from './fish'
+import {
+  addCatchToOuting,
+  catchNews,
+  EMPTY_OUTING,
+  EMPTY_SAVE,
+  formatOuting,
+  formatDex,
+  formatHelp,
+  formatRare,
+  formatTop,
+  gradeIntro,
+  sizeGrade,
+  pickSpecies,
+  rarest,
+  recordCatch,
+  rollFish,
+  SPECIES,
+  toSave,
+} from './fish'
 
 const PANE = {
   plugin: 'megabite',
@@ -61,9 +79,30 @@ test('short casts find more shore fish and long casts more deep fish', async () 
 
 test('the record is the heaviest catch', async () => {
   const base = { rarity: 'common', isTrophy: false, caughtAt: '2026-11-11T00:00:00.000Z' } as const
-  const one = recordCatch(EMPTY_SAVE, { ...base, id: 'a', species: 'largemouth-bass', name: 'Largemouth Bass', lengthIn: 14, weightLb: 1.5 })
-  const two = recordCatch(one, { ...base, id: 'b', species: 'common-carp', name: 'Common Carp', lengthIn: 20, weightLb: 5 })
-  const three = recordCatch(two, { ...base, id: 'c', species: 'bluegill', name: 'Bluegill', lengthIn: 7, weightLb: 0.3 })
+  const one = recordCatch(EMPTY_SAVE, {
+    ...base,
+    id: 'a',
+    species: 'largemouth-bass',
+    name: 'Largemouth Bass',
+    lengthIn: 14,
+    weightLb: 1.5,
+  })
+  const two = recordCatch(one, {
+    ...base,
+    id: 'b',
+    species: 'common-carp',
+    name: 'Common Carp',
+    lengthIn: 20,
+    weightLb: 5,
+  })
+  const three = recordCatch(two, {
+    ...base,
+    id: 'c',
+    species: 'bluegill',
+    name: 'Bluegill',
+    lengthIn: 7,
+    weightLb: 0.3,
+  })
   expect(three.biggest?.id).toBe('b')
   expect(three.totalCaught).toBe(3)
   expect(three.species['largemouth-bass'].count).toBe(1)
@@ -86,7 +125,8 @@ test('a landed fish is saved to the store and shown in the pane', async ($, on) 
   on('state.set', (_, e, next) => {
     if (e.key === 'hooked') {
       const written = e.value as { value?: Hooked | null } | Hooked | null
-      seen.fish = written && 'id' in written ? written : (written as { value?: Hooked | null } | null)?.value ?? seen.fish
+      seen.fish =
+        written && 'id' in written ? written : ((written as { value?: Hooked | null } | null)?.value ?? seen.fish)
     }
     return next(e)
   })
@@ -184,9 +224,36 @@ test('q in the game closes the pane', async ($, on) => {
 })
 
 const caughtAt = '2026-11-11T00:00:00.000Z'
-const trout = { id: 't1', species: 'golden-trout', name: 'Golden Trout', rarity: 'legendary', lengthIn: 11, weightLb: 0.7, isTrophy: false, caughtAt } as const
-const tuna = { id: 'b1', species: 'bluefin-tuna', name: 'Bluefin Tuna', rarity: 'epic', lengthIn: 82, weightLb: 430, isTrophy: false, caughtAt } as const
-const gill = { id: 'g1', species: 'bluegill', name: 'Bluegill', rarity: 'common', lengthIn: 7, weightLb: 0.3, isTrophy: false, caughtAt } as const
+const trout = {
+  id: 't1',
+  species: 'golden-trout',
+  name: 'Golden Trout',
+  rarity: 'legendary',
+  lengthIn: 11,
+  weightLb: 0.7,
+  isTrophy: false,
+  caughtAt,
+} as const
+const tuna = {
+  id: 'b1',
+  species: 'bluefin-tuna',
+  name: 'Bluefin Tuna',
+  rarity: 'epic',
+  lengthIn: 82,
+  weightLb: 430,
+  isTrophy: false,
+  caughtAt,
+} as const
+const gill = {
+  id: 'g1',
+  species: 'bluegill',
+  name: 'Bluegill',
+  rarity: 'common',
+  lengthIn: 7,
+  weightLb: 0.3,
+  isTrophy: false,
+  caughtAt,
+} as const
 
 test('a small legendary is the rarest while the tuna stays the heaviest', async () => {
   const save = recordCatch(recordCatch(EMPTY_SAVE, tuna), trout)
@@ -322,13 +389,23 @@ test('dropping old fish refills the top list from recent catches and fixes the c
   expect(cleaned.top.every(one => one.name === 'Bluegill')).toBe(true)
   expect(cleaned.totalCaught).toBe(12)
   expect(Math.abs(cleaned.totalWeightLb - (save.totalWeightLb - 9))).toBeLessThan(0.01)
-  expect(formatRare(cleaned).split('\n').every(line => line === line.trimEnd())).toBe(true)
+  expect(
+    formatRare(cleaned)
+      .split('\n')
+      .every(line => line === line.trimEnd()),
+  ).toBe(true)
 })
 
 test('the recap sums the outing and says nothing when nothing happened', async () => {
   expect(formatOuting(EMPTY_OUTING)).toBeNull()
-  const outing = addCatchToOuting(addCatchToOuting({ ...EMPTY_OUTING, escaped: 1 }, gill, true), { ...gill, id: 'g2', weightLb: 0.7 }, false)
-  expect(formatOuting(outing)).toBe('MegaBite recap: 2 caught · 1 new species · 1 got away · best TROPHY Bluegill 11.2 oz')
+  const outing = addCatchToOuting(
+    addCatchToOuting({ ...EMPTY_OUTING, escaped: 1 }, gill, true),
+    { ...gill, id: 'g2', weightLb: 0.7 },
+    false,
+  )
+  expect(formatOuting(outing)).toBe(
+    'MegaBite recap: 2 caught · 1 new species · 1 got away · best TROPHY Bluegill 11.2 oz',
+  )
 })
 
 test('Claude finishing chimes only when sound is on, flashes the open game, and closing logs a recap', async ($, on) => {
@@ -356,7 +433,12 @@ test('Claude finishing chimes only when sound is on, flashes the open game, and 
     return next(e)
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'fish', args: '', origin: { kind: 'composer' }, presentation: { isFullscreen: true, columns: 120 } } as Parameters<typeof $.command.run>[0])
+  await $.command.run({
+    command: 'fish',
+    args: '',
+    origin: { kind: 'composer' },
+    presentation: { isFullscreen: true, columns: 120 },
+  } as Parameters<typeof $.command.run>[0])
   const ui = await $.ui.mount(PANE)
   await ui.advance(100)
 

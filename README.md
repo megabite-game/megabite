@@ -26,7 +26,7 @@ Type `/fish` to open the game. Click the pane once if your keys still go to the 
 
 | Key | Does |
 | --- | --- |
-| Space | cast (press again to release), set the hook, reel in |
+| Space or Enter | cast (press again to release), set the hook, reel in |
 | ← | let line out when the line strains or ↯ flashes |
 | Tab | records: Rarest, Heaviest, back to the water |
 | m | mute or unmute the chime (muted by default) |

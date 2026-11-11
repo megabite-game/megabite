@@ -2,7 +2,32 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Catch, GameProps, Hooked, Outing, Save, SizeGrade } from '../types'
-import { addCatchToOuting, catchNews, EMPTY_OUTING, EMPTY_SAVE, formatOuting, formatDex, formatHelp, gradeIntro, formatRare, formatStats, formatTop, formatWeight, heaviestList, rarest, rarestList, RARITY_COLOR, sizeGrade, recordCatch, recordEscape, rollFish, SPECIES, speciesFound, toSave } from './fish'
+import {
+  addCatchToOuting,
+  catchNews,
+  EMPTY_OUTING,
+  EMPTY_SAVE,
+  formatOuting,
+  formatDex,
+  formatHelp,
+  gradeIntro,
+  formatRare,
+  formatStats,
+  formatTop,
+  formatWeight,
+  GRADE_LABEL,
+  heaviestList,
+  rarest,
+  rarestList,
+  RARITY_COLOR,
+  sizeGrade,
+  recordCatch,
+  recordEscape,
+  rollFish,
+  SPECIES,
+  speciesFound,
+  toSave,
+} from './fish'
 
 const PANE = 'megabite'
 const TITLE = 'MegaBite'
@@ -35,11 +60,16 @@ const isGameMessage = (data: unknown): data is GameMessage => {
 }
 
 const GRADE_COLOR: Record<SizeGrade, string> = { big: '#ff8a65', trophy: '#ff5722', record: '#ff1744' }
-const GRADE_TAG: Record<SizeGrade, string> = { big: 'BIG', trophy: 'TROPHY', record: '★ RECORD' }
 
 const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
-const gameProps = (fish: Hooked | null, caught: Catch | null, busy: boolean, record: Save, doneCount: number): GameProps => ({
+const gameProps = (
+  fish: Hooked | null,
+  caught: Catch | null,
+  busy: boolean,
+  record: Save,
+  doneCount: number,
+): GameProps => ({
   hooked: fish ? { id: fish.id, difficulty: fish.difficulty, rarity: fish.rarity } : null,
   last: caught,
   lastGrade: caught ? sizeGrade(caught.species, caught.weightLb) : null,
@@ -92,11 +122,16 @@ export const register: Register = on => {
     // /fish mute and /fish unmute set the chime (sound on/off kept as aliases); m in the game toggles.
     if (arg === 'mute' || arg === 'sound off') return { text: await toggleSound($, false) }
     if (arg === 'unmute' || arg === 'sound on') return { text: await toggleSound($, true) }
-    if (arg === 'sound') return { text: `MegaBite is ${(await read($, isSoundOn)) ? 'unmuted' : 'muted'}. /fish mute or /fish unmute to change it.` }
+    if (arg === 'sound')
+      return {
+        text: `MegaBite is ${(await read($, isSoundOn)) ? 'unmuted' : 'muted'}. /fish mute or /fish unmute to change it.`,
+      }
     if (!(await read($, isOpen))) await update($, outing, () => EMPTY_OUTING)
     await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, rows: 10, columns: 48 })
     await update($, isOpen, () => true)
-    return { text: 'MegaBite opened. Click the pane once if keys go to the chat. Space casts, Tab shows records, Esc closes. /fish help explains the rest.' }
+    return {
+      text: 'MegaBite opened. Click the pane once if keys go to the chat. Space casts, Tab shows records, Esc closes. /fish help explains the rest.',
+    }
   })
 
   // Only the main thread's turns, not subagents'.
@@ -186,7 +221,15 @@ export const register: Register = on => {
       }
     }
 
-    return { props: gameProps(await read($, hooked), await read($, last), await read($, isClaudeBusy), await read($, save), await read($, claudeDoneCount)) }
+    return {
+      props: gameProps(
+        await read($, hooked),
+        await read($, last),
+        await read($, isClaudeBusy),
+        await read($, save),
+        await read($, claudeDoneCount),
+      ),
+    }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -196,7 +239,13 @@ export const register: Register = on => {
     }
     const { Box, Text, Client } = $.ui.resolve(e)
     const record = await read($, save)
-    const props = gameProps(await read($, hooked), await read($, last), await read($, isClaudeBusy), record, await read($, claudeDoneCount))
+    const props = gameProps(
+      await read($, hooked),
+      await read($, last),
+      await read($, isClaudeBusy),
+      record,
+      await read($, claudeDoneCount),
+    )
     const rare = rarest(record)
     const heaviestGrade = record.biggest ? sizeGrade(record.biggest.species, record.biggest.weightLb) : null
 
@@ -207,7 +256,7 @@ export const register: Register = on => {
           <Box flexDirection="row">
             <Text color="#78909c">{'⚖ Heaviest  '}</Text>
             {heaviestGrade && (
-              <Text color={GRADE_COLOR[heaviestGrade]} weight="bold">{`${GRADE_TAG[heaviestGrade]} `}</Text>
+              <Text color={GRADE_COLOR[heaviestGrade]} weight="bold">{`${GRADE_LABEL[heaviestGrade]} `}</Text>
             )}
             {record.biggest ? (
               <Text weight="bold">{`${record.biggest.name} ${formatWeight(record.biggest.weightLb)}`}</Text>
@@ -218,7 +267,13 @@ export const register: Register = on => {
           <Box flexDirection="row" justifyContent="space-between">
             <Box flexDirection="row">
               <Text color="#78909c">{'◆ Rarest    '}</Text>
-              {rare ? <Text color={RARITY_COLOR[rare.rarity]} weight="bold">{rare.name}</Text> : <Text color="#78909c">—</Text>}
+              {rare ? (
+                <Text color={RARITY_COLOR[rare.rarity]} weight="bold">
+                  {rare.name}
+                </Text>
+              ) : (
+                <Text color="#78909c">—</Text>
+              )}
             </Box>
             <Text color="#78909c">{`${speciesFound(record)}/${SPECIES.length} species`}</Text>
           </Box>
