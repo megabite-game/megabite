@@ -1,13 +1,17 @@
 import type { ClientModule, ClientSurface } from 'claude-code'
 
-import type { GameProps, RareEntry, Rarity, SizeGrade } from '../types'
+import type { GameProps, RareEntry, SizeGrade } from '../types'
+import { formatLength, formatWeight, GRADE_COLOR, GRADE_LABEL, RARITY_COLOR } from './fish'
+import { HOOK_FLASH, HOOKED_LINE, letOut, reelIn, reelTick, ZONE_HIGH, ZONE_LOW } from './reel'
+import type { Line } from './reel'
 
 type View = 'fish' | 'rare' | 'heavy'
 const VIEWS: readonly View[] = ['fish', 'rare', 'heavy']
 
 type Phase = 'idle' | 'charging' | 'flying' | 'waiting' | 'bite' | 'reeling' | 'landed' | 'lost'
 
-type State = {
+// The game's state; the line's fields (tension, progress, wear, …) are reel.ts's `Line`.
+type State = Line & {
   phase: Phase
   // Tab cycles the water and two record lists; never mid-fight.
   view: View
@@ -20,19 +24,6 @@ type State = {
   biteAt: number
   windowEnd: number
   hookedAt: number
-  tension: number
-  progress: number
-  slackTicks: number
-  // Ticks left in the fish's current run; while it runs the line pays out.
-  runTicks: number
-  // Calm ticks left before the fish can run again.
-  runCooldown: number
-  // Line wear, 0 to 1: builds while the tension is in the red, raising the odds of a snap there.
-  wear: number
-  // Head shake: ticks of warning left (0 when none), whether ← answered it, and calm ticks before the next.
-  shakeWarn: number
-  shakeDodged: boolean
-  shakeCooldown: number
   // The hooked fish's id once the hooks module has rolled it.
   fishId: string | null
   landedId: string | null
@@ -43,32 +34,8 @@ type Segment = { text: string; color?: string; bg?: string; bold?: boolean }
 
 const TICK_MS = 100
 const DOCK = 7
-const ZONE_LOW = 35
-const ZONE_HIGH = 80
 const FLIGHT_TICKS = 8
 const BITE_WINDOW = 14
-const HOOK_FLASH = 8
-const SLACK_LIMIT = 20
-const SHAKE_WARNING = 5
-
-// Rarer fish head-shake more often (chance per tick), and a missed shake is likelier to snap the line.
-const SHAKE_CHANCE: Record<Rarity, number> = {
-  common: 0.001,
-  uncommon: 0.004,
-  rare: 0.008,
-  epic: 0.012,
-  legendary: 0.015,
-}
-const SHAKE_SNAP: Record<Rarity, number> = { common: 0.2, uncommon: 0.3, rare: 0.4, epic: 0.5, legendary: 0.6 }
-
-const RARITY_COLOR: Record<Rarity, string> = {
-  common: '#eceff1',
-  uncommon: '#66bb6a',
-  rare: '#42a5f5',
-  epic: '#ba68c8',
-  legendary: '#ffca28',
-}
-
 // Water gets darker with depth; one background per row.
 const SURFACE_BG = '#1e88e5'
 const DEPTH_BG = ['#1565c0', '#0d47a1']
@@ -117,7 +84,7 @@ const castFeet = (distance: number): number => Math.round(10 + distance * 60)
 const giveLine = (surface: ClientSurface<State>): void => {
   const s = surface.state
   if (!s || s.phase !== 'reeling') return
-  surface.setState({ ...s, tension: Math.max(0, s.tension - 12), shakeDodged: s.shakeWarn > 0 || s.shakeDodged })
+  surface.setState({ ...s, ...letOut(s) })
 }
 
 // Tab: water, rarest, heaviest, back to water. Never mid-fight; before a bite it reels the line back in.
@@ -155,22 +122,14 @@ const press = (surface: ClientSurface<State>): void => {
     case 'bite':
       surface.setState({
         ...s,
+        ...HOOKED_LINE,
         phase: 'reeling',
         hookedAt: s.tick,
-        tension: 55,
-        progress: 0,
-        slackTicks: 0,
-        runTicks: 0,
-        runCooldown: 0,
-        wear: 0,
-        shakeWarn: 0,
-        shakeDodged: false,
-        shakeCooldown: 0,
         fishId: props?.hooked?.id ?? s.fishId,
       })
       return
     case 'reeling':
-      surface.setState({ ...s, tension: s.tension + 8 })
+      surface.setState({ ...s, ...reelIn(s) })
       return
   }
 }
@@ -229,84 +188,16 @@ const tick = (surface: ClientSurface<State>): void => {
       } else surface.setState({ ...s, tick: t, fishId })
       return
     case 'reeling': {
-      const d = props?.hooked?.difficulty ?? 0.5
-      let runTicks = s.runTicks
-      let runCooldown = s.runCooldown
-      let tension = s.tension
-      if (runTicks > 0) {
-        tension += 1.8 + d * 2.2
-        runTicks -= 1
-        if (runTicks === 0) runCooldown = 14
-      } else {
-        tension -= 1.3 + d * 1.0
-        // The fish tires as it nears the dock, so runs get rarer.
-        const runChance = (0.025 + d * 0.05) * (1 - s.progress / 150)
-        if (runCooldown > 0) runCooldown -= 1
-        else if (t - s.hookedAt > HOOK_FLASH && Math.random() < runChance) runTicks = 5 + Math.floor(d * 8)
-      }
-      // Head shake: a short warning, then a jolt. Answered with ←, it is a nudge; missed, it may snap the line outright.
-      const rarity = props?.hooked?.rarity ?? 'common'
-      let shakeWarn = s.shakeWarn
-      let shakeDodged = s.shakeDodged
-      let shakeCooldown = Math.max(0, s.shakeCooldown - 1)
-      let isShakeSnap = false
-      if (shakeWarn > 0) {
-        shakeWarn -= 1
-        if (shakeWarn === 0) {
-          if (shakeDodged) tension += 5
-          else if (Math.random() < SHAKE_SNAP[rarity]) isShakeSnap = true
-          else tension += 30
-          shakeDodged = false
-          shakeCooldown = 25
-        }
-      } else if (
-        shakeCooldown === 0 &&
-        runTicks === 0 &&
-        t - s.hookedAt > HOOK_FLASH &&
-        Math.random() < SHAKE_CHANCE[rarity]
-      ) {
-        shakeWarn = SHAKE_WARNING
-        shakeDodged = false
-      }
-      const isRunning = runTicks > 0
-      const inZone = tension >= ZONE_LOW && tension <= ZONE_HIGH
-      // A run holds the fish where it is if the line stays in the green; only a bad line loses ground.
-      const gain = isRunning ? (inZone ? 0 : -0.4) : inZone ? 2.2 - d * 1.5 : -0.2
-      const progress = clamp(s.progress + gain, 0, 100)
-      const slackTicks = tension < ZONE_LOW - 20 ? s.slackTicks + 1 : 0
-      const isStrained = tension > ZONE_HIGH
-      const wear = isStrained ? Math.min(1, s.wear + 0.015 + d * 0.02) : Math.max(0, s.wear - 0.002)
-
-      if (isShakeSnap) {
+      const fighter = { difficulty: props?.hooked?.difficulty ?? 0.5, rarity: props?.hooked?.rarity ?? 'common' }
+      const step = reelTick(s, t - s.hookedAt, fighter, Math.random)
+      if (step.kind === 'lost') {
         if (fishId) surface.post({ type: 'lost', id: fishId })
-        surface.setState({ ...s, tick: t, phase: 'lost', note: 'head shake snapped it' })
-      } else if (isStrained && Math.random() < wear * 0.06) {
-        if (fishId) surface.post({ type: 'lost', id: fishId })
-        surface.setState({ ...s, tick: t, phase: 'lost', wear, note: 'frayed line snapped' })
-      } else if (tension > 100) {
-        if (fishId) surface.post({ type: 'lost', id: fishId })
-        surface.setState({ ...s, tick: t, phase: 'lost', tension: 100, note: 'snapped' })
-      } else if (slackTicks > SLACK_LIMIT) {
-        if (fishId) surface.post({ type: 'lost', id: fishId })
-        surface.setState({ ...s, tick: t, phase: 'lost', note: 'shook loose' })
-      } else if (progress >= 100) {
+        surface.setState({ ...s, ...step.patch, tick: t, phase: 'lost', note: step.note })
+      } else if (step.kind === 'landed') {
         if (fishId) surface.post({ type: 'land', id: fishId })
-        surface.setState({ ...s, tick: t, phase: 'landed', progress, landedId: fishId })
+        surface.setState({ ...s, tick: t, phase: 'landed', progress: step.progress, landedId: fishId })
       } else {
-        surface.setState({
-          ...s,
-          tick: t,
-          tension: clamp(tension, 0, 120),
-          progress,
-          slackTicks,
-          runTicks,
-          runCooldown,
-          wear,
-          shakeWarn,
-          shakeDodged,
-          shakeCooldown,
-          fishId,
-        })
+        surface.setState({ ...s, ...step.line, tick: t, fishId })
       }
       return
     }
@@ -538,15 +429,9 @@ const chip = (label: string, lit?: string): Segment => ({
 })
 const dim = (text: string): Segment => ({ text, color: '#78909c' })
 
-// Same format as fish.ts's formatWeight / formatLength, which the commands use.
-const formatWeight = (lb: number): string => (lb < 1 ? `${(lb * 16).toFixed(1)} oz` : `${lb.toFixed(1)} lb`)
-const formatLength = (inches: number): string => `${inches.toFixed(1)} in`
-
 // A coloured tag for a fish that is big for its species; nothing for an ordinary one.
-const GRADE_TAG: Record<SizeGrade, string> = { big: 'BIG', trophy: 'TROPHY', record: '★ RECORD' }
-const GRADE_COLOR: Record<SizeGrade, string> = { big: '#ff8a65', trophy: '#ff5722', record: '#ff1744' }
 const gradeTag = (grade: SizeGrade | null): Segment[] =>
-  grade ? [{ text: `${GRADE_TAG[grade]} `, color: GRADE_COLOR[grade], bold: true }] : []
+  grade ? [{ text: `${GRADE_LABEL[grade]} `, color: GRADE_COLOR[grade], bold: true }] : []
 
 type Hud = { line: Segment[]; accent: string }
 
@@ -654,7 +539,7 @@ const listRows = (list: RareEntry[], width: number): Segment[][] => {
   const rows: Segment[][] = list.slice(0, RARE_ROWS).map(one => {
     const color = RARITY_COLOR[one.rarity]
     const stats = ` ${formatWeight(one.weightLb)} ${formatLength(one.lengthIn)}`
-    const tagRoom = one.grade ? GRADE_TAG[one.grade].length + 1 : 0
+    const tagRoom = one.grade ? GRADE_LABEL[one.grade].length + 1 : 0
     const nameRoom = Math.max(6, width - stats.length - tagRoom - 2)
     const name = one.name.length > nameRoom ? `${one.name.slice(0, nameRoom - 1)}…` : one.name.padEnd(nameRoom)
     return [

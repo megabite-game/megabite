@@ -183,6 +183,7 @@ export const sizeGrade = (speciesId: string, weightLb: number): SizeGrade | null
 }
 
 export const GRADE_LABEL: Record<SizeGrade, string> = { big: 'BIG', trophy: 'TROPHY', record: '★ RECORD' }
+export const GRADE_COLOR: Record<SizeGrade, string> = { big: '#ff8a65', trophy: '#ff5722', record: '#ff1744' }
 
 const gradeSuffix = (grade: SizeGrade | null): string => (grade ? `  ${GRADE_LABEL[grade]}` : '')
 
@@ -260,7 +261,7 @@ export const recordCatch = (save: Save, fish: Catch): Save => {
 
 export const recordEscape = (save: Save): Save => ({ ...save, totalEscaped: save.totalEscaped + 1 })
 
-// One format everywhere, pane and commands alike (game.tsx keeps an identical copy): one decimal.
+// One format everywhere, pane and commands alike: one decimal.
 export const formatWeight = (lb: number): string => (lb < 1 ? `${(lb * 16).toFixed(1)} oz` : `${lb.toFixed(1)} lb`)
 export const formatLength = (inches: number): string => `${inches.toFixed(1)} in`
 
@@ -436,4 +437,28 @@ export const formatOuting = (outing: Outing): string | null => {
     parts.push(`best ${grade ? `${GRADE_LABEL[grade]} ` : ''}${outing.best.name} ${formatWeight(outing.best.weightLb)}`)
   }
   return `MegaBite recap: ${parts.join(' · ')}`
+}
+
+// Everything a landed fish changes in the save, plus the one pop-up it earns: the news,
+// then a size tag's meaning the first time that tag is earned.
+export const landFish = (
+  before: Save,
+  fish: Hooked,
+  caughtAt: string,
+): { caught: Catch; save: Save; news: string; isNewSpecies: boolean } => {
+  const caught: Catch = {
+    id: fish.id,
+    species: fish.species,
+    name: fish.name,
+    rarity: fish.rarity,
+    lengthIn: fish.lengthIn,
+    weightLb: fish.weightLb,
+    isTrophy: fish.isTrophy,
+    caughtAt,
+  }
+  const intro = gradeIntro(before, caught)
+  const caughtSave = recordCatch(before, caught)
+  const save = intro ? { ...caughtSave, seenGrades: [...caughtSave.seenGrades, intro.grade] } : caughtSave
+  const news = [catchNews(before, caught), intro?.text].filter(Boolean).join(' · ')
+  return { caught, save, news, isNewSpecies: !before.species[caught.species] }
 }

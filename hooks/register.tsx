@@ -1,27 +1,26 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { Catch, GameProps, Hooked, Outing, Save, SizeGrade } from '../types'
+import type { GameProps, Outing, Save } from '../types'
 import {
   addCatchToOuting,
-  catchNews,
   EMPTY_OUTING,
   EMPTY_SAVE,
   formatOuting,
   formatDex,
   formatHelp,
-  gradeIntro,
   formatRare,
   formatStats,
   formatTop,
   formatWeight,
+  GRADE_COLOR,
   GRADE_LABEL,
   heaviestList,
+  landFish,
   rarest,
   rarestList,
   RARITY_COLOR,
   sizeGrade,
-  recordCatch,
   recordEscape,
   rollFish,
   SPECIES,
@@ -59,25 +58,25 @@ const isGameMessage = (data: unknown): data is GameMessage => {
   return type === 'bite' || type === 'land' || type === 'lost' || type === 'close' || type === 'sound'
 }
 
-const GRADE_COLOR: Record<SizeGrade, string> = { big: '#ff8a65', trophy: '#ff5722', record: '#ff1744' }
-
 const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
-const gameProps = (
-  fish: Hooked | null,
-  caught: Catch | null,
-  busy: boolean,
-  record: Save,
-  doneCount: number,
-): GameProps => ({
-  hooked: fish ? { id: fish.id, difficulty: fish.difficulty, rarity: fish.rarity } : null,
-  last: caught,
-  lastGrade: caught ? sizeGrade(caught.species, caught.weightLb) : null,
-  isClaudeBusy: busy,
-  claudeDoneCount: doneCount,
-  rare: rarestList(record, 5),
-  heavy: heaviestList(record, 5),
-})
+// What the game is handed: the session's values, with the hooked fish cut to what it may see before landing.
+const readGameProps = async ($: EngineInterface): Promise<GameProps> => {
+  const fish = await read($, hooked)
+  const caught = await read($, last)
+  const busy = await read($, isClaudeBusy)
+  const record = await read($, save)
+  const doneCount = await read($, claudeDoneCount)
+  return {
+    hooked: fish ? { id: fish.id, difficulty: fish.difficulty, rarity: fish.rarity } : null,
+    last: caught,
+    lastGrade: caught ? sizeGrade(caught.species, caught.weightLb) : null,
+    isClaudeBusy: busy,
+    claudeDoneCount: doneCount,
+    rare: rarestList(record, 5),
+    heavy: heaviestList(record, 5),
+  }
+}
 
 // The store is the record across sessions; re-read it before each write so two sessions don't clobber.
 const loadSave = async ($: EngineInterface): Promise<Save> => {
@@ -185,28 +184,13 @@ export const register: Register = on => {
     if (message.type === 'land') {
       const fish = await read($, hooked)
       if (fish && fish.id === message.id) {
-        const caught: Catch = {
-          id: fish.id,
-          species: fish.species,
-          name: fish.name,
-          rarity: fish.rarity,
-          lengthIn: fish.lengthIn,
-          weightLb: fish.weightLb,
-          isTrophy: fish.isTrophy,
-          caughtAt: new Date().toISOString(),
-        }
-        const before = await loadSave($)
-        const intro = gradeIntro(before, caught)
-        const caughtSave = recordCatch(before, caught)
-        const next = intro ? { ...caughtSave, seenGrades: [...caughtSave.seenGrades, intro.grade] } : caughtSave
-        // One pop-up per catch: the news, then a tag's meaning the first time it is earned.
-        const news = [catchNews(before, caught), intro?.text].filter(Boolean).join(' · ')
+        const { caught, save: next, news, isNewSpecies } = landFish(await loadSave($), fish, new Date().toISOString())
         await $.store.set(STORE_KEY, next)
         await update($, save, () => next)
         await update($, last, () => caught)
         await update($, hooked, () => null)
         if (news) $.ui.toast(news)
-        await update($, outing, (current: Outing) => addCatchToOuting(current, caught, !before.species[caught.species]))
+        await update($, outing, (current: Outing) => addCatchToOuting(current, caught, isNewSpecies))
       }
     }
 
@@ -221,15 +205,7 @@ export const register: Register = on => {
       }
     }
 
-    return {
-      props: gameProps(
-        await read($, hooked),
-        await read($, last),
-        await read($, isClaudeBusy),
-        await read($, save),
-        await read($, claudeDoneCount),
-      ),
-    }
+    return { props: await readGameProps($) }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -239,13 +215,7 @@ export const register: Register = on => {
     }
     const { Box, Text, Client } = $.ui.resolve(e)
     const record = await read($, save)
-    const props = gameProps(
-      await read($, hooked),
-      await read($, last),
-      await read($, isClaudeBusy),
-      record,
-      await read($, claudeDoneCount),
-    )
+    const props = await readGameProps($)
     const rare = rarest(record)
     const heaviestGrade = record.biggest ? sizeGrade(record.biggest.species, record.biggest.weightLb) : null
 
