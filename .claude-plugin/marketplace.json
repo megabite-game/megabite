@@ -1,5 +1,6 @@
 {
   "name": "megabite",
+  "description": "MegaBite: a fishing game for the moments you wait on Claude",
   "owner": { "name": "MegaBite" },
   "plugins": [{ "name": "megabite", "source": "./" }]
 }
