@@ -1,0 +1,5 @@
+{
+  "name": "megabite",
+  "owner": { "name": "Karnveer Grewal" },
+  "plugins": [{ "name": "megabite", "source": "./" }]
+}
