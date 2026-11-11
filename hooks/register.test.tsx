@@ -235,8 +235,9 @@ test('Claude finishing chimes only when sound is on, flashes the open game, and 
   await ui.post({ type: 'land', id: 'f1' })
   await ui.key({ key: 'q', in: 'game' })
   await ui.advance(100)
-  expect(logged).toHaveLength(1)
-  expect(logged[0]).toMatch(/^MegaBite recap: 1 caught · 1 new species · best /)
+  const recaps = logged.filter(line => line.startsWith('MegaBite recap'))
+  expect(recaps).toHaveLength(1)
+  expect(recaps[0]).toMatch(/^MegaBite recap: 1 caught · 1 new species · best /)
   await ui.unmount()
 })
 
@@ -281,7 +282,7 @@ test('closing the pane mid-fight counts the fish as got away', async ($, on) => 
   await ui.post({ type: 'bite', distance: 0.5, id: 'f1' })
   await ui.post({ type: 'close' })
   expect((stored.save as Save | undefined)?.totalEscaped).toBe(1)
-  expect(logged).toEqual(['MegaBite recap: 0 caught · 1 got away'])
+  expect(logged.filter(line => line.startsWith('MegaBite recap'))).toEqual(['MegaBite recap: 0 caught · 1 got away'])
   await ui.unmount()
 })
 
@@ -331,6 +332,13 @@ test('/fish options answer in text, and an unknown one does not open the game', 
   expect(opened).toHaveLength(0)
 })
 
+test('/fish keeps its opening hint out of what Claude reads', async ($, on) => {
+  const { logged, fish } = await openGame($, on, [])
+  const result = await fish('')
+  expect((result as { text?: string }).text).toBeUndefined()
+  expect(logged.some(line => line.startsWith('MegaBite opened.'))).toBe(true)
+})
+
 test('/fish runs mid-turn, ignores case, and says when there is nothing to close', async ($, on) => {
   const { registered, fish } = await openGame($, on, [])
   expect(registered).toContainEqual(expect.objectContaining({ name: 'fish', immediate: true }))
@@ -361,7 +369,7 @@ test('an outing whose pane the engine dropped is closed out at the next /fish', 
   await ui.unmount()
   await fish('')
   expect((stored.save as Save | undefined)?.totalEscaped).toBe(1)
-  expect(logged).toEqual(['MegaBite recap: 0 caught · 1 got away'])
+  expect(logged.filter(line => line.startsWith('MegaBite recap'))).toEqual(['MegaBite recap: 0 caught · 1 got away'])
 })
 
 test('a landing and a close that overlap count the fish once', async ($, on) => {

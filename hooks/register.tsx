@@ -184,9 +184,11 @@ export const register: Register = on => {
     await refreshSave($)
     await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, rows: 10, columns: 48 })
     await update($, isOpen, () => true)
-    return {
-      text: 'MegaBite opened. Click the pane once if keys go to the chat. Space casts, Tab shows records, Esc closes. /fish help explains the rest.',
-    }
+    // A plugin command's text goes to the model; a logged line is for the person alone.
+    $.ui.log(
+      'MegaBite opened. Click the pane once if keys go to the chat. Space casts, Tab shows records, Esc closes. /fish help explains the rest.',
+    )
+    return {}
   })
 
   // Only the main thread's turns, not subagents'.

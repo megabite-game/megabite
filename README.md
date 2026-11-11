@@ -18,7 +18,7 @@ From a shell:
 claude plugin install megabite --marketplace Karnveer-Grewal/megabite
 ```
 
-In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `Karnveer-Grewal/megabite`, then Add plugin.
+In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `Karnveer-Grewal/megabite`, then Add plugin. The game itself plays only in a terminal session; elsewhere the pane says so, and the `/fish` commands still work.
 
 ## Play
 
