@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import type { Hooked } from '../types'
 import { gill, trout, tuna } from './fixtures'
 import { formatHelp, formatRare, formatTop } from './format'
-import { catchNews, EMPTY_SAVE, gradeIntro, landFish, rarest, recordCatch, toSave } from './save'
+import { catchNews, EMPTY_SAVE, gradeIntro, isNewerSave, landFish, rarest, recordCatch, toSave } from './save'
 
 test('the record is the heaviest catch', async () => {
   const base = { rarity: 'common', caughtAt: '2026-11-11T00:00:00.000Z' } as const
@@ -77,10 +77,14 @@ test('a size tag is explained the first time it is earned, then never again', as
     species: 'coelacanth',
     name: 'Coelacanth',
     rarity: 'legendary',
-    weightLb: 160,
+    weightLb: 210,
   } as const
-  expect(gradeIntro(EMPTY_SAVE, coelacanth)?.text).toBe("First TROPHY: at least 1.6× a typical Coelacanth's weight")
+  expect(gradeIntro(EMPTY_SAVE, coelacanth)?.text).toBe("First TROPHY: at least 2× a typical Coelacanth's weight")
+  expect(gradeIntro(EMPTY_SAVE, { ...coelacanth, weightLb: 250 })?.text).toBe(
+    'First ★ RECORD: only about 1 in 60 Coelacanth weigh this much',
+  )
   expect(formatHelp()).toContain('TROPHY     2× typical or more')
+  expect(formatHelp()).toContain('all but about 1 in 60 of that species')
 })
 
 test('catches of species no longer in the game are dropped from an old save', async () => {
@@ -165,4 +169,21 @@ test('a damaged save loads as what can still be read', async () => {
   expect(loaded.totalWeightLb).toBe(0)
   expect(loaded.seenGrades).toEqual(['big'])
   expect(toSave('nonsense')).toEqual(EMPTY_SAVE)
+})
+
+test('stored catches show their species as the game has it now', async () => {
+  const stale = { ...gill, name: 'Blue Gill', rarity: 'rare' }
+  const loaded = toSave({ ...recordCatch(EMPTY_SAVE, gill), recent: [stale], top: [stale], biggest: stale })
+  for (const one of [loaded.recent[0], loaded.top[0], loaded.biggest]) {
+    expect(one?.name).toBe('Bluegill')
+    expect(one?.rarity).toBe('common')
+  }
+})
+
+test('a save from a later MegaBite is told apart from a damaged one', async () => {
+  expect(isNewerSave({ version: 2 })).toBe(true)
+  expect(isNewerSave({ version: 1 })).toBe(false)
+  expect(isNewerSave({ version: 'x' })).toBe(false)
+  expect(isNewerSave(null)).toBe(false)
+  expect(isNewerSave(undefined)).toBe(false)
 })

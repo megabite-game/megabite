@@ -396,20 +396,28 @@ export const hud = (s: State, props: GameProps | undefined, width: number): Hud 
 
 const RARE_ROWS = 5
 
+// The fewest cells of a name a records row keeps before it drops the length.
+const MIN_NAME = 6
+
 // A records view: one row per catch, name coloured by tier, size tag in front, padded to the scene's height.
+// In a narrow pane the length gives way first, then the name; no row runs past `width`.
 export const listRows = (list: RareEntry[], width: number): Segment[][] => {
   const rows: Segment[][] = list.slice(0, RARE_ROWS).map(one => {
     const color = RARITY_COLOR[one.rarity]
-    const stats = ` ${formatWeight(one.weightLb)} ${formatLength(one.lengthIn)}`
     const tagRoom = one.grade ? GRADE_LABEL[one.grade].length + 1 : 0
-    const nameRoom = Math.max(6, width - stats.length - tagRoom - 2)
+    const full = ` ${formatWeight(one.weightLb)} ${formatLength(one.lengthIn)}`
+    const stats = width - full.length - tagRoom - 2 >= MIN_NAME ? full : ` ${formatWeight(one.weightLb)}`
+    const nameRoom = Math.max(2, width - stats.length - tagRoom - 2)
     const name = one.name.length > nameRoom ? `${one.name.slice(0, nameRoom - 1)}…` : one.name.padEnd(nameRoom)
-    return [
-      { text: '● ', color },
-      ...gradeTag(one.grade),
-      { text: name, color, bold: true },
-      { text: stats, color: '#b0bec5' },
-    ]
+    return fit(
+      [
+        { text: '● ', color },
+        ...gradeTag(one.grade),
+        { text: name, color, bold: true },
+        { text: stats, color: '#b0bec5' },
+      ],
+      width,
+    )
   })
   if (rows.length === 0) rows.push([dim('Nothing landed yet.')])
   while (rows.length < RARE_ROWS) rows.push([{ text: ' ' }])

@@ -9,6 +9,7 @@ import {
   EMPTY_OUTING,
   EMPTY_SAVE,
   heaviestList,
+  isNewerSave,
   landFish,
   rarest,
   rarestList,
@@ -66,10 +67,48 @@ const readGameProps = async ($: EngineInterface): Promise<GameProps> => {
   }
 }
 
-// The store is the record across sessions; re-read it before each write so two sessions don't clobber.
+// The store is the record across sessions: read fresh for each command and before each write, so two
+// sessions don't clobber each other.
 const loadSave = async ($: EngineInterface): Promise<Save> => {
   return toSave(await $.store.get(STORE_KEY))
 }
+
+const NEWER_SAVE_NOTE =
+  'MegaBite: your catch log is from a newer MegaBite, so catches here are not saved. Update the plugin.'
+
+// Keep `next` as the catch log: in the store, unless it holds a later MegaBite's save, which is left
+// whole; and in the session, so the game shows it either way.
+const writeSave = async ($: EngineInterface, next: Save): Promise<void> => {
+  if (isNewerSave(await $.store.get(STORE_KEY))) $.ui.toast(NEWER_SAVE_NOTE)
+  else await $.store.set(STORE_KEY, next)
+  await update($, save, () => next)
+}
+
+// The catch log a catch or an escape changes: the store's, or, while the store holds a later MegaBite's
+// save, the session's.
+const baseSave = async ($: EngineInterface): Promise<Save> => {
+  const stored = await $.store.get(STORE_KEY)
+  return isNewerSave(stored) ? read($, save) : toSave(stored)
+}
+
+// Hooks can overlap (a landing still saving as the pane closes), so changes to the catch log, the outing
+// and the fish on the line run one at a time. Nothing run here may close the pane, or call refreshSave:
+// both wait here too.
+let queue: Promise<unknown> = Promise.resolve()
+const oneAtATime = <T,>(work: () => Promise<T>): Promise<T> => {
+  const run = queue.then(work, work)
+  queue = run.catch(() => undefined)
+  return run
+}
+
+// Show the store's catch log, which another session may have added to; a later MegaBite's save is left unread.
+const refreshSave = ($: EngineInterface): Promise<void> =>
+  oneAtATime(async () => {
+    const stored = await $.store.get(STORE_KEY)
+    if (isNewerSave(stored)) return
+    const fresh = toSave(stored)
+    await update($, save, () => fresh)
+  })
 
 // Flip the chime (or set it), remember it across sessions, and say what it is now.
 const toggleSound = async ($: EngineInterface, to?: boolean): Promise<string> => {
@@ -81,11 +120,20 @@ const toggleSound = async ($: EngineInterface, to?: boolean): Promise<string> =>
 
 // The fish on the line got away: count it in the save and the outing, and let it go.
 const escapeFish = async ($: EngineInterface): Promise<void> => {
-  const next = recordEscape(await loadSave($))
-  await $.store.set(STORE_KEY, next)
-  await update($, save, () => next)
+  await writeSave($, recordEscape(await baseSave($)))
   await update($, hooked, () => null)
   await update($, outing, (current: Outing) => ({ ...current, escaped: current.escaped + 1 }))
+}
+
+// The outing is over: a fish still on the line got away, and a one-line recap goes to the chat.
+// Only while the game counts as open, so it runs once per outing.
+const endOuting = async ($: EngineInterface): Promise<void> => {
+  if (!(await read($, isOpen))) return
+  if (await read($, hooked)) await escapeFish($)
+  const recap = formatOuting(await read($, outing))
+  if (recap) $.ui.log(recap)
+  await update($, isOpen, () => false)
+  await update($, outing, () => EMPTY_OUTING)
 }
 
 export const register: Register = on => {
@@ -93,7 +141,9 @@ export const register: Register = on => {
     await $.command.register({
       name: 'fish',
       description: 'MegaBite: open the fishing pane (`/fish help` for keys and tags)',
-      argumentHint: '[help|dex|top|rare|stats|mute|unmute|close]',
+      argumentHint: '[help|dex|top|rare|stats|mute|unmute|sound|close]',
+      // So /fish opens while Claude is working, which is when the game is for.
+      immediate: true,
     })
     const stored = await loadSave($)
     await update($, save, () => stored)
@@ -105,8 +155,9 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'fish' }, async ($, e) => {
-    const arg = e.args.trim()
+    const arg = e.args.trim().toLowerCase().replace(/\s+/g, ' ')
     if (arg === 'close') {
+      if (!(await isPaneUp($))) return { text: 'MegaBite is not open.' }
       await $.ui.close({ id: PANE })
       return { text: 'MegaBite closed.' }
     }
@@ -122,8 +173,14 @@ export const register: Register = on => {
       return {
         text: `MegaBite is ${(await read($, isSoundOn)) ? 'unmuted' : 'muted'}. /fish mute or /fish unmute to change it.`,
       }
-    if (arg !== '') return { text: formatUnknown(arg) }
-    if (!(await isPaneUp($))) await update($, outing, () => EMPTY_OUTING)
+    if (arg !== '') return { text: formatUnknown(e.args.trim()) }
+    if (!(await isPaneUp($)))
+      await oneAtATime(async () => {
+        // A pane the engine dropped (its drawing failed) ran no close hook: end that outing now.
+        await endOuting($)
+        await update($, outing, () => EMPTY_OUTING)
+      })
+    await refreshSave($)
     await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, rows: 10, columns: 48 })
     await update($, isOpen, () => true)
     return {
@@ -144,22 +201,16 @@ export const register: Register = on => {
     await update($, isClaudeBusy, () => false)
     if (await isPaneUp($)) {
       await update($, claudeDoneCount, n => n + 1)
+      await refreshSave($)
       if (await read($, isSoundOn)) $.audio.play({ asset: CHIME }).catch(() => undefined)
     }
     return done
   })
 
-  // However the pane closes (Esc, q, the ✕, /fish close), log a one-line recap of the outing.
-  // A fish still on the line got away.
+  // However the pane closes (Esc, q, the ✕, /fish close), end the outing.
   on('ui.close', async ($, e, next) => {
     const closed = await next(e)
-    if (e.id === PANE && (await read($, isOpen))) {
-      if (await read($, hooked)) await escapeFish($)
-      const recap = formatOuting(await read($, outing))
-      if (recap) $.ui.log(recap)
-      await update($, isOpen, () => false)
-      await update($, outing, () => EMPTY_OUTING)
-    }
+    if (e.id === PANE) await oneAtATime(() => endOuting($))
     return closed
   })
 
@@ -177,31 +228,32 @@ export const register: Register = on => {
     }
 
     // The game posts until the props show a message arrived, so a repeat changes nothing.
-    if (message.type === 'bite') {
-      const current = await read($, hooked)
-      if (current?.id !== message.id) {
-        const fish = rollFish(message.distance, Math.random, message.id)
-        await update($, hooked, () => fish)
+    await oneAtATime(async () => {
+      if (message.type === 'bite') {
+        const current = await read($, hooked)
+        if (current?.id !== message.id) {
+          const fish = rollFish(message.distance, Math.random, message.id)
+          await update($, hooked, () => fish)
+        }
       }
-    }
 
-    if (message.type === 'land') {
-      const fish = await read($, hooked)
-      if (fish && fish.id === message.id) {
-        const { caught, save: next, news, isNewSpecies } = landFish(await loadSave($), fish, new Date().toISOString())
-        await $.store.set(STORE_KEY, next)
-        await update($, save, () => next)
-        await update($, last, () => caught)
-        await update($, hooked, () => null)
-        if (news) $.ui.toast(news)
-        await update($, outing, (current: Outing) => addCatchToOuting(current, caught, isNewSpecies))
+      if (message.type === 'land') {
+        const fish = await read($, hooked)
+        if (fish && fish.id === message.id) {
+          const { caught, save: next, news, isNewSpecies } = landFish(await baseSave($), fish, new Date().toISOString())
+          await writeSave($, next)
+          await update($, last, () => caught)
+          await update($, hooked, () => null)
+          if (news) $.ui.toast(news)
+          await update($, outing, (current: Outing) => addCatchToOuting(current, caught, isNewSpecies))
+        }
       }
-    }
 
-    if (message.type === 'lost') {
-      const fish = await read($, hooked)
-      if (fish && fish.id === message.id) await escapeFish($)
-    }
+      if (message.type === 'lost') {
+        const fish = await read($, hooked)
+        if (fish && fish.id === message.id) await escapeFish($)
+      }
+    })
 
     return { props: await readGameProps($) }
   })

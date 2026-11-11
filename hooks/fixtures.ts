@@ -9,6 +9,18 @@ export const seeded = (seed: number): (() => number) => {
   }
 }
 
+// A seeded random whose draws are independent of each other (mulberry32), for tests that count outcomes
+// over many rolls: in `seeded`, one draw predicts the next, which skews the tails.
+export const mixed = (seed: number): (() => number) => {
+  let x = seed >>> 0
+  return () => {
+    x = (x + 0x6d2b79f5) >>> 0
+    let t = Math.imul(x ^ (x >>> 15), x | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 export const caughtAt = '2026-11-11T00:00:00.000Z'
 export const trout = {
   id: 't1',

@@ -250,15 +250,17 @@ const openGame = async (
   const logged: string[] = []
   const played: unknown[] = []
   const opened: unknown[] = []
+  const toasts: string[] = []
+  const registered: unknown[] = []
   on('store.get', (_, e) => ({ value: stored[e.key] }))
   on('store.set', (_, e) => ((stored[e.key] = e.value), { value: undefined }))
   on('ui.log', (_, e) => (logged.push(String((e as { text?: unknown }).text)), { value: undefined }))
   on('audio.play', (_, e) => (played.push(e), { value: undefined }))
-  on('ui.toast', () => ({ value: undefined }))
+  on('ui.toast', (_, e) => (toasts.push(String((e as { text?: unknown }).text ?? e)), { value: undefined }))
   on('ui.open', (_, e) => (opened.push(e), { value: { isPlaced: true } }))
   on('ui.panes', () => ({ value: panes }))
   on('ui.close', () => ({ value: undefined }))
-  on('command.register', () => ({ value: { command: 'fish' } }))
+  on('command.register', (_, e) => (registered.push(e), { value: { command: 'fish' } }))
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   on('turn.complete', () => ({ text: '', reason: 'answer' }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
@@ -269,7 +271,7 @@ const openGame = async (
       origin: { kind: 'composer' },
       presentation: { isFullscreen: true, columns: 120 },
     } as Parameters<typeof $.command.run>[0])
-  return { stored, logged, played, opened, fish }
+  return { stored, logged, played, opened, toasts, registered, fish }
 }
 
 test('closing the pane mid-fight counts the fish as got away', async ($, on) => {
@@ -302,4 +304,59 @@ test('/fish options answer in text, and an unknown one does not open the game', 
   expect(stored.sound).toBe(false)
   expect(JSON.stringify(await fish('stat'))).toContain('MegaBite has no \\"/fish stat\\"')
   expect(opened).toHaveLength(0)
+})
+
+test('/fish runs mid-turn, ignores case, and says when there is nothing to close', async ($, on) => {
+  const { registered, fish } = await openGame($, on, [])
+  expect(registered).toContainEqual(expect.objectContaining({ name: 'fish', immediate: true }))
+  expect(JSON.stringify(await fish('  STATS '))).toContain('Caught 0 (0 got away)')
+  expect(JSON.stringify(await fish('sound   ON'))).toContain('unmuted')
+  expect(JSON.stringify(await fish('close'))).toContain('MegaBite is not open.')
+})
+
+test('a save from a later MegaBite is never written over; the game still counts the catch', async ($, on) => {
+  const later = { version: 2, anything: 'kept' }
+  const { stored, toasts, fish } = await openGame($, on)
+  stored.save = later
+  await fish('')
+  const ui = await $.ui.mount(PANE)
+  await ui.post({ type: 'bite', distance: 0.5, id: 'f1' })
+  await ui.post({ type: 'land', id: 'f1' })
+  expect(stored.save).toEqual(later)
+  expect(toasts.some(text => text.includes('newer MegaBite'))).toBe(true)
+  expect(JSON.stringify(await ui.drawn())).toContain('1/50')
+  await ui.unmount()
+})
+
+test('an outing whose pane the engine dropped is closed out at the next /fish', async ($, on) => {
+  const { stored, logged, fish } = await openGame($, on, [])
+  await fish('')
+  const ui = await $.ui.mount(PANE)
+  await ui.post({ type: 'bite', distance: 0.5, id: 'f1' })
+  await ui.unmount()
+  await fish('')
+  expect((stored.save as Save | undefined)?.totalEscaped).toBe(1)
+  expect(logged).toEqual(['MegaBite recap: 0 caught · 1 got away'])
+})
+
+test('a landing and a close that overlap count the fish once', async ($, on) => {
+  const { stored, fish } = await openGame($, on)
+  await fish('')
+  const ui = await $.ui.mount(PANE)
+  await ui.post({ type: 'bite', distance: 0.5, id: 'f1' })
+  await Promise.all([ui.post({ type: 'land', id: 'f1' }), ui.post({ type: 'close' })])
+  const saved = stored.save as Save | undefined
+  expect((saved?.totalCaught ?? 0) + (saved?.totalEscaped ?? 0)).toBe(1)
+  await ui.unmount()
+})
+
+test("another session's catches reach the open pane when Claude finishes", async ($, on) => {
+  const { stored, fish } = await openGame($, on)
+  await fish('')
+  const ui = await $.ui.mount(PANE)
+  expect(JSON.stringify(await ui.drawn())).not.toContain('Golden Trout')
+  stored.save = recordCatch(EMPTY_SAVE, trout)
+  await $.turn.complete({ turnId: 't1', answer: '', durationMs: 1, isAborted: false, reason: 'answer' })
+  expect(JSON.stringify(await ui.drawn())).toContain('Golden Trout')
+  await ui.unmount()
 })

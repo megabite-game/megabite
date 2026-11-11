@@ -1,5 +1,15 @@
 import type { Catch, Hooked, Outing, RareEntry, Rarity, Save, SizeGrade, SpeciesRecord } from '../types'
-import { formatWeight, GRADE_LABEL, gradeLines, round, sizeGrade, SPECIES, TIER_ORDER, tierName } from './fish'
+import {
+  formatWeight,
+  GRADE_LABEL,
+  gradeLines,
+  RECORD_SHARE,
+  round,
+  sizeGrade,
+  SPECIES,
+  TIER_ORDER,
+  tierName,
+} from './fish'
 
 // The catch log kept across sessions: recording catches and escapes, reading old saves, and the lists built from it.
 
@@ -45,16 +55,28 @@ const isRecord = (value: unknown): value is SpeciesRecord =>
   isCount((value as SpeciesRecord).bestWeightLb) &&
   isCount((value as SpeciesRecord).bestLengthIn)
 
+// A stored catch shows its species' name and tier as the game has them now, not as they were when caught.
+const asSpeciesNow = (one: Catch): Catch => {
+  const species = SPECIES.find(known => known.id === one.species)
+  return species ? { ...one, name: species.name, rarity: species.rarity } : one
+}
+
+// A save written by a later MegaBite, which this one cannot read and must never write over.
+export const isNewerSave = (value: unknown): boolean => {
+  const version = typeof value === 'object' && value !== null ? (value as { version?: unknown }).version : undefined
+  return typeof version === 'number' && version > 1
+}
+
 // Accept a stored save, filling fields an earlier version did not keep and dropping catches of species
 // no longer in the game (the old joke fish) or entries too damaged to read.
 export const toSave = (value: unknown): Save => {
   if (typeof value !== 'object' || value === null || (value as { version?: unknown }).version !== 1) return EMPTY_SAVE
   const stored = value as Record<keyof Save, unknown>
   const storedRecent: unknown[] = Array.isArray(stored.recent) ? stored.recent : []
-  const recent = storedRecent.filter(isCatch)
+  const recent = storedRecent.filter(isCatch).map(asSpeciesNow)
   // Rebuild the top list from both lists so a dropped entry is refilled from recent catches.
   const storedTop: unknown[] = Array.isArray(stored.top) ? stored.top : []
-  const pool = new Map([...storedTop, ...recent].filter(isCatch).map(one => [one.id, one]))
+  const pool = new Map([...storedTop.filter(isCatch).map(asSpeciesNow), ...recent].map(one => [one.id, one]))
   const top = [...pool.values()].sort(byWeight).slice(0, TOP_LIMIT)
   const storedSpecies = typeof stored.species === 'object' && stored.species !== null ? stored.species : {}
   const species = Object.fromEntries(
@@ -62,7 +84,7 @@ export const toSave = (value: unknown): Save => {
       (entry): entry is [string, SpeciesRecord] => SPECIES.some(one => one.id === entry[0]) && isRecord(entry[1]),
     ),
   )
-  const biggest = isCatch(stored.biggest) ? stored.biggest : (top[0] ?? null)
+  const biggest = isCatch(stored.biggest) ? asSpeciesNow(stored.biggest) : (top[0] ?? null)
   // Counts follow the species kept; weight is trimmed by what the dropped recent catches weighed.
   const totalCaught = Object.values(species).reduce((sum, one) => sum + one.count, 0)
   const droppedWeight = storedRecent
@@ -177,7 +199,7 @@ export const gradeIntro = (save: Save, fish: Catch): { text: string; grade: Size
   const times = round(lines[grade] / lines.typical, 1)
   const meaning =
     grade === 'record'
-      ? `close to the heaviest ${fish.name} there is`
+      ? `only about 1 in ${Math.round(1 / RECORD_SHARE)} ${fish.name} weigh this much`
       : `at least ${times}× a typical ${fish.name}'s weight`
   return { grade, text: `First ${GRADE_LABEL[grade]}: ${meaning}` }
 }

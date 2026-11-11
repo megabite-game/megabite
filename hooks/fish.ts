@@ -113,8 +113,15 @@ const RARITY_WEIGHT: Record<Rarity, number> = {
   legendary: 2,
 }
 
-// Now and then a fish runs well past typical length; its size tag still comes from its weight (sizeGrade).
+// Spread of lengths around the typical one (log-normal sigma).
+const LENGTH_SIGMA = 0.18
+// Now and then a fish runs well past typical length (1.3 to 1.7×); its size tag still comes from its weight.
 const BONUS_SIZE_CHANCE = 0.04
+const BONUS_LOW = 1.3
+const BONUS_SPAN = 0.4
+// Body condition: weight for length varies ±12%.
+const CONDITION_LOW = 0.88
+const CONDITION_SPAN = 0.24
 
 export type Random = () => number
 
@@ -154,11 +161,11 @@ export const pickSpecies = (distance: number, random: Random): Species => {
 export const rollFish = (distance: number, random: Random, id: string): Hooked => {
   const species = pickSpecies(distance, random)
   const isBonusSize = random() < BONUS_SIZE_CHANCE
-  let length = species.lengthIn * Math.exp(0.18 * gaussian(random))
-  if (isBonusSize) length *= 1.3 + random() * 0.4
+  let length = species.lengthIn * Math.exp(LENGTH_SIGMA * gaussian(random))
+  if (isBonusSize) length *= BONUS_LOW + random() * BONUS_SPAN
   length = Math.min(species.maxLengthIn, Math.max(species.lengthIn * 0.4, length))
   const a = species.weightLb / species.lengthIn ** 3
-  const condition = 0.88 + random() * 0.24
+  const condition = CONDITION_LOW + random() * CONDITION_SPAN
   const weight = a * length ** 3 * condition
   const sizeFactor = Math.min(1, length / species.maxLengthIn)
 
@@ -173,10 +180,57 @@ export const rollFish = (distance: number, random: Random, id: string): Hooked =
   }
 }
 
-// The weights where a species' size tags start, graded as state trophy programs do: 1.3× typical weight
-// is big, 2× is a trophy, and 80% of the heaviest the species can roll is record class.
-// Where a species' typical size is near its record (Arapaima, Coelacanth, Mekong Giant Catfish), record
-// class starts below 2×; there a trophy starts halfway between big and record, so every tag can show.
+// Share of a species' catches heavy enough for ★ RECORD: the same odds for every species.
+export const RECORD_SHARE = 1 / 60
+
+// Upper tail of the standard normal (Abramowitz & Stegun 7.1.26, error under 1.5e-7).
+const normalTail = (z: number): number => {
+  const x = Math.abs(z) / Math.SQRT2
+  const t = 1 / (1 + 0.3275911 * x)
+  const erfc =
+    t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429)))) * Math.exp(-x * x)
+  return z >= 0 ? erfc / 2 : 1 - erfc / 2
+}
+
+// The share of rollFish's catches of a species weighing at least `weight`, by its own odds: length, the
+// bonus stretch, the cap and body condition (the floor on length only lifts small fish, so it is left out).
+const MIDPOINTS = 24
+const shareAtLeast = (species: Species, weight: number): number => {
+  const a = species.weightLb / species.lengthIn ** 3
+  const longerThan = (length: number, stretch: number): number =>
+    normalTail(Math.log(length / (species.lengthIn * stretch)) / LENGTH_SIGMA)
+  let sum = 0
+  for (let i = 0; i < MIDPOINTS; i++) {
+    const condition = CONDITION_LOW + (CONDITION_SPAN * (i + 0.5)) / MIDPOINTS
+    const length = Math.cbrt(weight / (a * condition))
+    // Lengths stop at the cap, so a weight that needs more is never reached in this condition.
+    if (length > species.maxLengthIn) continue
+    let bonus = 0
+    for (let j = 0; j < MIDPOINTS; j++) bonus += longerThan(length, BONUS_LOW + (BONUS_SPAN * (j + 0.5)) / MIDPOINTS)
+    sum += (1 - BONUS_SIZE_CHANCE) * longerThan(length, 1) + (BONUS_SIZE_CHANCE * bonus) / MIDPOINTS
+  }
+  return sum / MIDPOINTS
+}
+
+// The weight only RECORD_SHARE of a species' catches reach, found by bisection; worked out once per species.
+const recordLines = new Map<string, number>()
+const recordLine = (species: Species): number => {
+  const known = recordLines.get(species.id)
+  if (known !== undefined) return known
+  let low = species.weightLb
+  let high = (species.weightLb / species.lengthIn ** 3) * species.maxLengthIn ** 3 * (CONDITION_LOW + CONDITION_SPAN)
+  for (let i = 0; i < 40; i++) {
+    const mid = (low + high) / 2
+    if (shareAtLeast(species, mid) > RECORD_SHARE) low = mid
+    else high = mid
+  }
+  recordLines.set(species.id, high)
+  return high
+}
+
+// The weights where a species' size tags start: 1.3× typical weight is big and 2× is a trophy, as state
+// trophy programs grade; record class is the heaviest RECORD_SHARE of that species' catches. Should a
+// record line ever fall below 2×, a trophy starts halfway between big and record, so every tag can show.
 export const gradeLines = (
   speciesId: string,
 ): { typical: number; big: number; trophy: number; record: number } | null => {
@@ -184,7 +238,7 @@ export const gradeLines = (
   if (!species) return null
   const typical = species.weightLb
   const big = typical * 1.3
-  const record = typical * (species.maxLengthIn / species.lengthIn) ** 3 * 0.8
+  const record = recordLine(species)
   const trophy = typical * 2 < record ? typical * 2 : (big + record) / 2
   return { typical, big, trophy, record }
 }

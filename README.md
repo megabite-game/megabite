@@ -22,7 +22,7 @@ In the desktop app, where `/plugin` does not run: click + next to the prompt box
 
 ## Play
 
-Type `/fish` to open the game. Click the pane once if your keys still go to the chat.
+Type `/fish` to open the game, even while Claude is working. Click the pane once if your keys still go to the chat.
 
 | Key | Does |
 | --- | --- |
@@ -30,13 +30,13 @@ Type `/fish` to open the game. Click the pane once if your keys still go to the 
 | ← | let line out when the line strains or ↯ flashes |
 | Tab | records: Rarest, Heaviest, back to the water |
 | m | mute or unmute the chime (muted by default) |
-| Esc | close (also works from the chat) |
+| Esc or q | close (Esc also works from the chat, but only at an empty prompt while Claude is idle: mid-turn, Esc there stops Claude) |
 
 Reeling: keep the ◆ in the green. Too far right snaps the line; too slack and the fish shakes loose. Rarer fish run, head-shake and wear your line.
 
 - **Rarity** shows in the fish's name colour: Common, Uncommon, Rare, Epic, Legendary, based on how often anglers meet the fish in real life.
 - **Cast distance** matters: short casts reach near-shore fish, long casts deep-water ones and rarer tiers.
-- **Size tags** compare a catch with its own species: `BIG` (1.3× typical weight), `TROPHY` (2×, less for a few giants near their record), `★ RECORD` (near the heaviest the species gets). Sizes are checked against IGFA and FishBase records.
+- **Size tags** compare a catch with its own species: `BIG` (1.3× typical weight), `TROPHY` (2×), `★ RECORD` (heavier than all but about 1 in 60 of that species, the same odds for every fish). Maximum sizes are checked against IGFA and FishBase records.
 
 ## Commands
 
@@ -48,6 +48,7 @@ Reeling: keep the ◆ in the green. Too far right snaps the line; too slack and 
 | `/fish rare` | your rarest species, best of each, with size tags |
 | `/fish stats` | totals, heaviest, rarest, species found |
 | `/fish mute` / `/fish unmute` | the chime when Claude finishes |
+| `/fish sound` | whether the chime is muted |
 | `/fish help` | keys, rules and tags |
 | `/fish close` | close the game |
 

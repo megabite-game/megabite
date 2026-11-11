@@ -1,6 +1,6 @@
 import type { Habitat } from './fish'
 import type { Outing, Save, SizeGrade } from '../types'
-import { formatLength, formatWeight, GRADE_LABEL, sizeGrade, SPECIES, TIER_ORDER, tierName } from './fish'
+import { formatLength, formatWeight, GRADE_LABEL, RECORD_SHARE, sizeGrade, SPECIES, TIER_ORDER, tierName } from './fish'
 import { rarest, rarestList, speciesFound, TOP_LIMIT } from './save'
 
 // The text the /fish commands print and the recap logged when the pane closes.
@@ -82,18 +82,18 @@ export const formatHelp = (): string =>
   [
     'MegaBite help',
     'Keys (click the pane once if they go to the chat)',
-    '  Space     cast, set the hook, reel in',
+    '  Space     cast (Enter too; press again to release), set the hook, reel in',
     '  ←         let line out: when the line strains or ↯ flashes',
     '  Tab       records: Rarest, Heaviest, Water',
     '  m         mute/unmute the chime when Claude finishes while the game is open (muted by default)',
-    '  Esc       close (works from the chat too; q also works inside the game)',
+    '  Esc / q   close (Esc also from an empty chat prompt while Claude is idle; mid-turn it stops Claude)',
     'Reeling: keep ◆ in the green. Too far right snaps the line; too slack and it shakes loose.',
     'Rarity, shown by name colour: Common, Uncommon, Rare, Epic, Legendary. Longer casts find rarer fish.',
     'Where fish live: short casts reach near-shore fish, long casts deep ones; /fish dex hints where undiscovered ones are.',
     "Size tags, against that species' typical weight:",
     '  BIG        1.3× typical or more',
-    '  TROPHY     2× typical or more (less for a few giants near their record)',
-    '  ★ RECORD   near the heaviest that species gets',
+    '  TROPHY     2× typical or more',
+    `  ★ RECORD   heavier than all but about 1 in ${Math.round(1 / RECORD_SHARE)} of that species`,
     COMMANDS,
   ].join('\n')
 

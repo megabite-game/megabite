@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { GameProps } from '../types'
-import { footer, lineWidth } from './draw'
+import { footer, lineWidth, listRows } from './draw'
 import { initial } from './play'
 import type { State } from './play'
 
@@ -37,7 +37,7 @@ test('the bottom row never runs past the pane, flashing or not', async () => {
     { ...base, view: 'rare' },
     { ...base, view: 'heavy' },
   ]
-  for (const width of [24, 44, 76]) {
+  for (const width of [20, 24, 44, 76]) {
     for (const s of states) {
       for (const isFlashing of [false, true]) {
         const { line, badge } = footer(s, props, width, isFlashing)
@@ -52,4 +52,24 @@ test('the flash says "Claude done" where it fits, and keeps the landed weight on
   expect(footer(initial(), props, 44, true).badge.text).toBe(' ✓ Claude done ')
   expect(footer({ ...initial(), phase: 'reeling', fishId: 'f1' }, props, 44, true).badge.text).toBe(' ✓ ')
   expect(JSON.stringify(footer(landed, props, 44, true).line)).toContain('640.3 lb')
+})
+
+test('records rows never run past the pane, dropping the length before the name', async () => {
+  const entry = {
+    name: 'Mekong Giant Catfish',
+    rarity: 'legendary',
+    weightLb: 699.99,
+    lengthIn: 106,
+    count: 3,
+  } as const
+  for (const grade of ['record', 'trophy', 'big', null] as const) {
+    for (let width = 20; width <= 80; width++) {
+      for (const row of listRows([{ ...entry, grade }], width)) expect(lineWidth(row)).toBeLessThanOrEqual(width)
+    }
+  }
+  const wide = JSON.stringify(listRows([{ ...entry, grade: 'record' }], 44))
+  expect(wide).toContain('106.0 in')
+  const narrow = JSON.stringify(listRows([{ ...entry, grade: 'record' }], 24))
+  expect(narrow).toContain('700.0 lb')
+  expect(narrow).not.toContain('106.0 in')
 })

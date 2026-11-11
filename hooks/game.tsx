@@ -27,7 +27,8 @@ const Game: ClientModule<GameProps, State> = (props, surface) => {
   }
 
   const s = surface.state
-  const width = Math.max(24, Math.min(80, (surface.columns || 44) - 4))
+  // The region less the border and padding (4 cells). A docked pane is at least 24 columns, so 20 always fits.
+  const width = Math.max(20, Math.min(80, (surface.columns || 44) - 4))
   // A new Claude-done count starts a 3-second flash; the first one seen is just a baseline.
   const seen = doneSeen.get(surface)
   if (!seen) doneSeen.set(surface, { count: props.claudeDoneCount, flashUntil: 0 })
