@@ -8,7 +8,7 @@ const W = 60, CW = 9, LH = 20, FS = 15, DT = 0.1
 const PAD = 20, BAR = 34
 const paneX = PAD, paneY = BAR + PAD + 2 * LH + 8
 const textX = paneX + 2 * CW, textY = paneY + LH
-const width = PAD * 2 + (W + 4) * CW, height = paneY + 8 * LH + PAD - 4
+const width = PAD * 2 + (W + 4) * CW, height = paneY + 7 * LH + PAD
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const cells = segs => { const out = []; for (const s of segs) for (const ch of [...s.text]) out.push({ ...s, text: ch }); return out }
 const runsOf = list => { const out = []; for (const c of list) { const p = out[out.length - 1]; if (p && p.color === c.color && p.bold === c.bold && p.bg === c.bg) p.text += c.text; else out.push({ ...c }) } return out }
