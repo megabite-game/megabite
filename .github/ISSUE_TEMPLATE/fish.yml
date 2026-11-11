@@ -1,0 +1,13 @@
+name: Suggest a fish
+description: A fish you'd like to catch in MegaBite
+labels: [enhancement]
+body:
+  - type: input
+    attributes:
+      label: Fish name
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Anything else
+      description: Where it lives, how rare it should be, why it's fun

@@ -1,0 +1,14 @@
+name: Bug report
+description: Something in MegaBite doesn't work
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+      description: What you pressed or typed, and what you saw
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Claude Code version
+      description: Run `claude --version`

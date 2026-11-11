@@ -5,7 +5,10 @@
   "types": "./types/index.d.ts",
   "license": "MIT",
   "author": {
-    "name": "MegaBite"
+    "name": "MegaBite",
+    "url": "https://github.com/megabite-game"
   },
-  "repository": "https://github.com/megabite-game/megabite"
+  "homepage": "https://github.com/megabite-game/megabite#readme",
+  "repository": "https://github.com/megabite-game/megabite",
+  "keywords": ["game", "fishing", "fun", "idle", "waiting", "terminal-game", "collection"]
 }
