@@ -5,7 +5,7 @@
   "types": "./types/index.d.ts",
   "license": "MIT",
   "author": {
-    "name": "Karnveer Grewal"
+    "name": "MegaBite"
   },
-  "repository": "https://github.com/Karnveer-Grewal/megabite"
+  "repository": "https://github.com/megabite-game/megabite"
 }

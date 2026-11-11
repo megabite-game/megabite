@@ -7,7 +7,7 @@ A small fishing game that lives in a pane beside your Claude Code chat, for the 
 At the prompt of a Claude Code terminal session:
 
 ```
-/plugin install megabite --marketplace Karnveer-Grewal/megabite
+/plugin install megabite --marketplace megabite-game/megabite
 ```
 
 Answer `y` to add the marketplace, then pick a scope (Enter takes the user scope, so it loads in every session).
@@ -15,10 +15,10 @@ Answer `y` to add the marketplace, then pick a scope (Enter takes the user scope
 From a shell:
 
 ```
-claude plugin install megabite --marketplace Karnveer-Grewal/megabite
+claude plugin install megabite --marketplace megabite-game/megabite
 ```
 
-In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `Karnveer-Grewal/megabite`, then Add plugin. The game itself plays only in a terminal session; elsewhere the pane says so, and the `/fish` commands still work.
+In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `megabite-game/megabite`, then Add plugin. The game itself plays only in a terminal session; elsewhere the pane says so, and the `/fish` commands still work.
 
 ## Play
 
