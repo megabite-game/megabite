@@ -180,8 +180,8 @@ export const rollFish = (distance: number, random: Random, id: string): Hooked =
   }
 }
 
-// Share of a species' catches heavy enough for ★ RECORD: the same odds for every species.
-export const RECORD_SHARE = 1 / 60
+// Each size tag goes to the heaviest 1 in N catches of a species, the same odds for every species.
+export const GRADE_ODDS: Record<SizeGrade, number> = { big: 10, trophy: 30, record: 60 }
 
 // Upper tail of the standard normal (Abramowitz & Stegun 7.1.26, error under 1.5e-7).
 const normalTail = (z: number): number => {
@@ -212,35 +212,32 @@ const shareAtLeast = (species: Species, weight: number): number => {
   return sum / MIDPOINTS
 }
 
-// The weight only RECORD_SHARE of a species' catches reach, found by bisection; worked out once per species.
-const recordLines = new Map<string, number>()
-const recordLine = (species: Species): number => {
-  const known = recordLines.get(species.id)
+// The weight only `share` of a species' catches reach, found by bisection; worked out once per tag and species.
+const lineCache = new Map<string, number>()
+const weightForShare = (species: Species, share: number): number => {
+  const key = `${species.id}:${share}`
+  const known = lineCache.get(key)
   if (known !== undefined) return known
   let low = species.weightLb
   let high = (species.weightLb / species.lengthIn ** 3) * species.maxLengthIn ** 3 * (CONDITION_LOW + CONDITION_SPAN)
   for (let i = 0; i < 40; i++) {
     const mid = (low + high) / 2
-    if (shareAtLeast(species, mid) > RECORD_SHARE) low = mid
+    if (shareAtLeast(species, mid) > share) low = mid
     else high = mid
   }
-  recordLines.set(species.id, high)
+  lineCache.set(key, high)
   return high
 }
 
-// The weights where a species' size tags start: 1.3× typical weight is big and 2× is a trophy, as state
-// trophy programs grade; record class is the heaviest RECORD_SHARE of that species' catches. Should a
-// record line ever fall below 2×, a trophy starts halfway between big and record, so every tag can show.
+// The weights where a species' size tags start: the heaviest 1 in 10 of its catches are big, 1 in 30 a
+// trophy, 1 in 60 record class (GRADE_ODDS), whether the species' cap sits near its typical size or far.
 export const gradeLines = (
   speciesId: string,
 ): { typical: number; big: number; trophy: number; record: number } | null => {
   const species = SPECIES.find(one => one.id === speciesId)
   if (!species) return null
-  const typical = species.weightLb
-  const big = typical * 1.3
-  const record = recordLine(species)
-  const trophy = typical * 2 < record ? typical * 2 : (big + record) / 2
-  return { typical, big, trophy, record }
+  const at = (grade: SizeGrade): number => weightForShare(species, 1 / GRADE_ODDS[grade])
+  return { typical: species.weightLb, big: at('big'), trophy: at('trophy'), record: at('record') }
 }
 
 export const sizeGrade = (speciesId: string, weightLb: number): SizeGrade | null => {

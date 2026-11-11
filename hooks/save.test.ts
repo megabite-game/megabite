@@ -67,8 +67,8 @@ test('an older save without a top list gets one from its recent catches', async 
 })
 
 test('a size tag is explained the first time it is earned, then never again', async () => {
-  const big = { ...gill, id: 'g9', weightLb: 0.7 }
-  expect(gradeIntro(EMPTY_SAVE, big)?.text).toBe("First TROPHY: at least 2× a typical Bluegill's weight")
+  const big = { ...gill, id: 'g9', weightLb: 1 }
+  expect(gradeIntro(EMPTY_SAVE, big)?.text).toBe('First TROPHY: only about 1 in 30 Bluegill weigh this much')
   expect(gradeIntro({ ...EMPTY_SAVE, seenGrades: ['trophy'] }, big)).toBeNull()
   expect(gradeIntro(EMPTY_SAVE, gill)).toBeNull()
   const coelacanth = {
@@ -77,14 +77,14 @@ test('a size tag is explained the first time it is earned, then never again', as
     species: 'coelacanth',
     name: 'Coelacanth',
     rarity: 'legendary',
-    weightLb: 210,
+    weightLb: 220,
   } as const
-  expect(gradeIntro(EMPTY_SAVE, coelacanth)?.text).toBe("First TROPHY: at least 2× a typical Coelacanth's weight")
+  expect(gradeIntro(EMPTY_SAVE, coelacanth)?.text).toBe('First BIG: only about 1 in 10 Coelacanth weigh this much')
   expect(gradeIntro(EMPTY_SAVE, { ...coelacanth, weightLb: 250 })?.text).toBe(
     'First ★ RECORD: only about 1 in 60 Coelacanth weigh this much',
   )
-  expect(formatHelp()).toContain('TROPHY     2× typical or more')
-  expect(formatHelp()).toContain('all but about 1 in 60 of that species')
+  expect(formatHelp()).toContain('TROPHY     the heaviest 1 in 30')
+  expect(formatHelp()).toContain('★ RECORD   the heaviest 1 in 60')
 })
 
 test('catches of species no longer in the game are dropped from an old save', async () => {
@@ -136,15 +136,15 @@ test('landing a fish records it, says what is new, and explains a first size tag
   })
   expect(first.isNewSpecies).toBe(true)
   expect(first.save.totalCaught).toBe(1)
-  expect(first.save.seenGrades).toEqual(['trophy'])
+  expect(first.save.seenGrades).toEqual(['big'])
   expect(first.news).toBe(
-    "MegaBite record: Largemouth Bass, 5.0 lb! · First TROPHY: at least 2× a typical Largemouth Bass's weight",
+    'MegaBite record: Largemouth Bass, 5.0 lb! · First BIG: only about 1 in 10 Largemouth Bass weigh this much',
   )
 
   const second = landFish(first.save, { ...hooked, id: 'h2', weightLb: 4.5 }, '2026-11-11T00:01:00.000Z')
   expect(second.isNewSpecies).toBe(false)
   expect(second.news).toBe('')
-  expect(second.save.seenGrades).toEqual(['trophy'])
+  expect(second.save.seenGrades).toEqual(['big'])
 })
 
 test('a damaged save loads as what can still be read', async () => {

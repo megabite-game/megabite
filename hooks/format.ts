@@ -1,6 +1,6 @@
 import type { Habitat } from './fish'
 import type { Outing, Save, SizeGrade } from '../types'
-import { formatLength, formatWeight, GRADE_LABEL, RECORD_SHARE, sizeGrade, SPECIES, TIER_ORDER, tierName } from './fish'
+import { formatLength, formatWeight, GRADE_LABEL, GRADE_ODDS, sizeGrade, SPECIES, TIER_ORDER, tierName } from './fish'
 import { rarest, rarestList, speciesFound, TOP_LIMIT } from './save'
 
 // The text the /fish commands print and the recap logged when the pane closes.
@@ -90,10 +90,10 @@ export const formatHelp = (): string =>
     'Reeling: keep ◆ in the green. Too far right snaps the line; too slack and it shakes loose.',
     'Rarity, shown by name colour: Common, Uncommon, Rare, Epic, Legendary. Longer casts find rarer fish.',
     'Where fish live: short casts reach near-shore fish, long casts deep ones; /fish dex hints where undiscovered ones are.',
-    "Size tags, against that species' typical weight:",
-    '  BIG        1.3× typical or more',
-    '  TROPHY     2× typical or more',
-    `  ★ RECORD   heavier than all but about 1 in ${Math.round(1 / RECORD_SHARE)} of that species`,
+    'Size tags, against catches of the same species (the same odds for every fish):',
+    `  BIG        the heaviest 1 in ${GRADE_ODDS.big}`,
+    `  TROPHY     the heaviest 1 in ${GRADE_ODDS.trophy}`,
+    `  ★ RECORD   the heaviest 1 in ${GRADE_ODDS.record}`,
     COMMANDS,
   ].join('\n')
 

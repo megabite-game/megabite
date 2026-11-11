@@ -32,7 +32,5 @@ test('the recap sums the outing and says nothing when nothing happened', async (
     { ...gill, id: 'g2', weightLb: 0.7 },
     false,
   )
-  expect(formatOuting(outing)).toBe(
-    'MegaBite recap: 2 caught · 1 new species · 1 got away · best TROPHY Bluegill 11.2 oz',
-  )
+  expect(formatOuting(outing)).toBe('MegaBite recap: 2 caught · 1 new species · 1 got away · best BIG Bluegill 11.2 oz')
 })

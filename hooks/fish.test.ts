@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { gill, mixed, seeded } from './fixtures'
-import { gradeLines, pickSpecies, RECORD_SHARE, rollFish, sizeGrade, SPECIES } from './fish'
+import { GRADE_ODDS, gradeLines, pickSpecies, rollFish, sizeGrade, SPECIES } from './fish'
 import { formatRare, formatTop } from './format'
 import { EMPTY_SAVE, recordCatch } from './save'
 
@@ -39,23 +39,24 @@ test('short casts find more shore fish and long casts more deep fish', async () 
 
 test('size grades are relative to the species, not raw pounds', async () => {
   // Bluegill: typical 0.3 lb, can roll to about 3 lb.
-  expect(sizeGrade('bluegill', 0.3)).toBeNull()
-  expect(sizeGrade('bluegill', 0.4)).toBe('big')
-  expect(sizeGrade('bluegill', 0.7)).toBe('trophy')
-  expect(sizeGrade('bluegill', 2.6)).toBe('record')
+  expect(sizeGrade('bluegill', 0.4)).toBeNull()
+  expect(sizeGrade('bluegill', 0.7)).toBe('big')
+  expect(sizeGrade('bluegill', 1)).toBe('trophy')
+  expect(sizeGrade('bluegill', 1.4)).toBe('record')
   // A 145 lb yellowfin is only big for a tuna that runs 60 lb typical.
-  expect(sizeGrade('yellowfin-tuna', 145)).toBe('trophy')
+  expect(sizeGrade('yellowfin-tuna', 145)).toBe('big')
   expect(sizeGrade('bluefin-tuna', 430)).toBeNull()
-  // A coelacanth runs 100 lb and tops out near its cap, so its record line sits close to it.
-  expect(sizeGrade('coelacanth', 150)).toBe('big')
-  expect(sizeGrade('coelacanth', 210)).toBe('trophy')
+  // A coelacanth runs 100 lb and tops out near 250, so its tags sit close together near the top.
+  expect(sizeGrade('coelacanth', 200)).toBeNull()
+  expect(sizeGrade('coelacanth', 220)).toBe('big')
+  expect(sizeGrade('coelacanth', 240)).toBe('trophy')
   expect(sizeGrade('coelacanth', 250)).toBe('record')
-  expect(formatRare(recordCatch(EMPTY_SAVE, { ...gill, weightLb: 0.7 }))).toContain('TROPHY')
+  expect(formatRare(recordCatch(EMPTY_SAVE, { ...gill, weightLb: 1 }))).toContain('TROPHY')
   // Heaviest is weight only, so its order and its labels never disagree.
-  expect(formatTop(recordCatch(EMPTY_SAVE, { ...gill, weightLb: 0.7 }))).not.toContain('TROPHY')
+  expect(formatTop(recordCatch(EMPTY_SAVE, { ...gill, weightLb: 1 }))).not.toContain('TROPHY')
 })
 
-test('every species earns RECORD about as often, whether its cap is near its typical size or far', async () => {
+test('every species earns each size tag about as often, whether its cap is near its typical size or far', async () => {
   for (const species of SPECIES) {
     const lines = gradeLines(species.id)
     expect(lines).not.toBeNull()
@@ -64,18 +65,24 @@ test('every species earns RECORD about as often, whether its cap is near its typ
     expect(lines.trophy).toBeLessThan(lines.record)
   }
   const random = mixed(23)
-  const rolls = new Map<string, { n: number; records: number }>()
+  const rank = { big: 1, trophy: 2, record: 3 } as const
+  const rolls = new Map<string, { n: number; atLeast: Record<keyof typeof rank, number> }>()
   for (let i = 0; i < 60000; i++) {
     const fish = rollFish(random(), random, 'x')
-    const seen = rolls.get(fish.species) ?? { n: 0, records: 0 }
+    const seen = rolls.get(fish.species) ?? { n: 0, atLeast: { big: 0, trophy: 0, record: 0 } }
     seen.n += 1
-    if (sizeGrade(fish.species, fish.weightLb) === 'record') seen.records += 1
+    const grade = sizeGrade(fish.species, fish.weightLb)
+    for (const tag of ['big', 'trophy', 'record'] as const)
+      if (grade && rank[grade] >= rank[tag]) seen.atLeast[tag] += 1
     rolls.set(fish.species, seen)
   }
   // Arapaima, Coelacanth and Mekong Giant Catfish (caps near typical) once tagged 15-20%; Rainbow Trout 0.002%.
   // A few hundred rolls of the rarest species leave room for chance, not for that.
-  for (const [id, { n, records }] of rolls) {
-    const share = records / n
-    if (share < RECORD_SHARE / 4 || share > RECORD_SHARE * 2.5) throw new Error(`${id}: ${share}`)
+  for (const [id, { n, atLeast }] of rolls) {
+    for (const tag of ['big', 'trophy', 'record'] as const) {
+      const share = atLeast[tag] / n
+      const odds = 1 / GRADE_ODDS[tag]
+      if (share < odds / 4 || share > odds * 2.5) throw new Error(`${id} ${tag}: ${share}`)
+    }
   }
 })
