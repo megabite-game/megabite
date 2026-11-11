@@ -36,13 +36,13 @@ In the desktop app, where `/plugin` does not run: click + next to the prompt box
 
 Type `/fish` to open the game, even while Claude is working. Click the pane once if your keys still go to the chat.
 
-| Key | Does |
-| --- | --- |
-| Space or Enter | cast (press again to release), set the hook, reel in |
-| ← | let line out when the line strains or ↯ flashes |
-| Tab | records: Rarest, Heaviest, back to the water |
-| m | mute or unmute the chime (muted by default) |
-| Esc or q | close (Esc also works from the chat, but only at an empty prompt while Claude is idle: mid-turn, Esc there stops Claude) |
+| Key            | Does                                                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Space or Enter | cast (press again to release), set the hook, reel in                                                                     |
+| ←              | let line out when the line strains or ↯ flashes                                                                          |
+| Tab            | records: Rarest, Heaviest, back to the water                                                                             |
+| m              | mute or unmute the chime (muted by default)                                                                              |
+| Esc or q       | close (Esc also works from the chat, but only at an empty prompt while Claude is idle: mid-turn, Esc there stops Claude) |
 
 Reeling: keep the ◆ in the green. Too far right snaps the line; too slack and the fish shakes loose. Rarer fish run, head-shake and wear your line.
 
@@ -52,17 +52,17 @@ Reeling: keep the ◆ in the green. Too far right snaps the line; too slack and 
 
 ## Commands
 
-| Command | Shows |
-| --- | --- |
-| `/fish` | open the game |
-| `/fish dex` | your collection by tier, with hints for undiscovered fish |
-| `/fish top` | your 10 heaviest catches |
-| `/fish rare` | your rarest species, best of each, with size tags |
-| `/fish stats` | totals, heaviest, rarest, species found |
-| `/fish mute` / `/fish unmute` | the chime when Claude finishes |
-| `/fish sound` | whether the chime is muted |
-| `/fish help` | keys, rules and tags |
-| `/fish close` | close the game |
+| Command                       | Shows                                                     |
+| ----------------------------- | --------------------------------------------------------- |
+| `/fish`                       | open the game                                             |
+| `/fish dex`                   | your collection by tier, with hints for undiscovered fish |
+| `/fish top`                   | your 10 heaviest catches                                  |
+| `/fish rare`                  | your rarest species, best of each, with size tags         |
+| `/fish stats`                 | totals, heaviest, rarest, species found                   |
+| `/fish mute` / `/fish unmute` | the chime when Claude finishes                            |
+| `/fish sound`                 | whether the chime is muted                                |
+| `/fish help`                  | keys, rules and tags                                      |
+| `/fish close`                 | close the game                                            |
 
 `/fish dex` after 18 catches:
 
