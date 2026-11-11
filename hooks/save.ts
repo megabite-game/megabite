@@ -1,5 +1,5 @@
 import type { Catch, Hooked, Outing, RareEntry, Rarity, Save, SizeGrade, SpeciesRecord } from '../types'
-import { formatWeight, GRADE_LABEL, round, sizeGrade, SPECIES, TIER_ORDER, tierName } from './fish'
+import { formatWeight, GRADE_LABEL, gradeLines, round, sizeGrade, SPECIES, TIER_ORDER, tierName } from './fish'
 
 // The catch log kept across sessions: recording catches and escapes, reading old saves, and the lists built from it.
 
@@ -172,11 +172,13 @@ export const heaviestList = (save: Save, limit: number): RareEntry[] =>
 // The first time a size tag is earned, say what it means; never again after.
 export const gradeIntro = (save: Save, fish: Catch): { text: string; grade: SizeGrade } | null => {
   const grade = sizeGrade(fish.species, fish.weightLb)
-  if (!grade || save.seenGrades.includes(grade)) return null
+  const lines = gradeLines(fish.species)
+  if (!grade || !lines || save.seenGrades.includes(grade)) return null
+  const times = round(lines[grade] / lines.typical, 1)
   const meaning =
     grade === 'record'
       ? `close to the heaviest ${fish.name} there is`
-      : `at least ${grade === 'trophy' ? '2' : '1.3'}× a typical ${fish.name}'s weight`
+      : `at least ${times}× a typical ${fish.name}'s weight`
   return { grade, text: `First ${GRADE_LABEL[grade]}: ${meaning}` }
 }
 

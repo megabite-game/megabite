@@ -71,6 +71,15 @@ test('a size tag is explained the first time it is earned, then never again', as
   expect(gradeIntro(EMPTY_SAVE, big)?.text).toBe("First TROPHY: at least 2× a typical Bluegill's weight")
   expect(gradeIntro({ ...EMPTY_SAVE, seenGrades: ['trophy'] }, big)).toBeNull()
   expect(gradeIntro(EMPTY_SAVE, gill)).toBeNull()
+  const coelacanth = {
+    ...gill,
+    id: 'c1',
+    species: 'coelacanth',
+    name: 'Coelacanth',
+    rarity: 'legendary',
+    weightLb: 160,
+  } as const
+  expect(gradeIntro(EMPTY_SAVE, coelacanth)?.text).toBe("First TROPHY: at least 1.6× a typical Coelacanth's weight")
   expect(formatHelp()).toContain('TROPHY     2× typical or more')
 })
 

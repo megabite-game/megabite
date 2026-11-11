@@ -92,7 +92,7 @@ export const formatHelp = (): string =>
     'Where fish live: short casts reach near-shore fish, long casts deep ones; /fish dex hints where undiscovered ones are.',
     "Size tags, against that species' typical weight:",
     '  BIG        1.3× typical or more',
-    '  TROPHY     2× typical or more',
+    '  TROPHY     2× typical or more (less for a few giants near their record)',
     '  ★ RECORD   near the heaviest that species gets',
     COMMANDS,
   ].join('\n')

@@ -173,17 +173,28 @@ export const rollFish = (distance: number, random: Random, id: string): Hooked =
   }
 }
 
-// Graded against the species, as state trophy programs do: 1.3× typical weight is big,
-// 2× is a trophy, and 80% of the heaviest the species can roll is record class.
-// Where a species' typical size is already near its record (Arapaima, Coelacanth, Mekong Giant Catfish),
-// record class starts below 2×, so those go from BIG straight to RECORD. That is on purpose.
-export const sizeGrade = (speciesId: string, weightLb: number): SizeGrade | null => {
+// The weights where a species' size tags start, graded as state trophy programs do: 1.3× typical weight
+// is big, 2× is a trophy, and 80% of the heaviest the species can roll is record class.
+// Where a species' typical size is near its record (Arapaima, Coelacanth, Mekong Giant Catfish), record
+// class starts below 2×; there a trophy starts halfway between big and record, so every tag can show.
+export const gradeLines = (
+  speciesId: string,
+): { typical: number; big: number; trophy: number; record: number } | null => {
   const species = SPECIES.find(one => one.id === speciesId)
   if (!species) return null
-  const heaviest = species.weightLb * (species.maxLengthIn / species.lengthIn) ** 3
-  if (weightLb >= heaviest * 0.8) return 'record'
-  if (weightLb >= species.weightLb * 2) return 'trophy'
-  if (weightLb >= species.weightLb * 1.3) return 'big'
+  const typical = species.weightLb
+  const big = typical * 1.3
+  const record = typical * (species.maxLengthIn / species.lengthIn) ** 3 * 0.8
+  const trophy = typical * 2 < record ? typical * 2 : (big + record) / 2
+  return { typical, big, trophy, record }
+}
+
+export const sizeGrade = (speciesId: string, weightLb: number): SizeGrade | null => {
+  const lines = gradeLines(speciesId)
+  if (!lines) return null
+  if (weightLb >= lines.record) return 'record'
+  if (weightLb >= lines.trophy) return 'trophy'
+  if (weightLb >= lines.big) return 'big'
   return null
 }
 

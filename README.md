@@ -36,7 +36,7 @@ Reeling: keep the ◆ in the green. Too far right snaps the line; too slack and 
 
 - **Rarity** shows in the fish's name colour: Common, Uncommon, Rare, Epic, Legendary, based on how often anglers meet the fish in real life.
 - **Cast distance** matters: short casts reach near-shore fish, long casts deep-water ones and rarer tiers.
-- **Size tags** compare a catch with its own species: `BIG` (1.3× typical weight), `TROPHY` (2×), `★ RECORD` (near the heaviest the species gets). Sizes are checked against IGFA and FishBase records.
+- **Size tags** compare a catch with its own species: `BIG` (1.3× typical weight), `TROPHY` (2×, less for a few giants near their record), `★ RECORD` (near the heaviest the species gets). Sizes are checked against IGFA and FishBase records.
 
 ## Commands
 

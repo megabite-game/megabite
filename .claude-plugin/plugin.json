@@ -1,6 +1,6 @@
 {
   "name": "megabite",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "MegaBite: a fishing game in a pane beside the chat, with a catch log kept across sessions",
   "types": "./types/index.d.ts",
   "license": "MIT",

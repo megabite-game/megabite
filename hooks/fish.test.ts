@@ -46,6 +46,10 @@ test('size grades are relative to the species, not raw pounds', async () => {
   // A 145 lb yellowfin is only big for a tuna that runs 60 lb typical.
   expect(sizeGrade('yellowfin-tuna', 145)).toBe('trophy')
   expect(sizeGrade('bluefin-tuna', 430)).toBeNull()
+  // A coelacanth runs 100 lb and tops out near 228, so its trophy sits between big (130) and record (183).
+  expect(sizeGrade('coelacanth', 150)).toBe('big')
+  expect(sizeGrade('coelacanth', 160)).toBe('trophy')
+  expect(sizeGrade('coelacanth', 190)).toBe('record')
   expect(formatRare(recordCatch(EMPTY_SAVE, { ...gill, weightLb: 0.7 }))).toContain('TROPHY')
   // Heaviest is weight only, so its order and its labels never disagree.
   expect(formatTop(recordCatch(EMPTY_SAVE, { ...gill, weightLb: 0.7 }))).not.toContain('TROPHY')
