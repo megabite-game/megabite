@@ -54,6 +54,18 @@ test('the flash says "Claude done" where it fits, and keeps the landed weight on
   expect(JSON.stringify(footer(landed, props, 44, true).line)).toContain('640.3 lb')
 })
 
+test('a narrow pane keeps the cast distance and the reel track', async () => {
+  const charging: State = { ...initial(), phase: 'charging', power: 0.5 }
+  const reeling: State = { ...initial(), phase: 'reeling', fishId: 'f1', hookedAt: -100, tension: 60, progress: 40 }
+  for (const width of [20, 24, 30]) {
+    expect(JSON.stringify(footer(charging, props, width, false).line)).toContain('40ft')
+    const line = footer(reeling, props, width, false).line
+    expect(JSON.stringify(line)).toContain('▐')
+    expect(JSON.stringify(line)).toContain('<')
+    expect(JSON.stringify(line)).not.toContain('…')
+  }
+})
+
 test('records rows never run past the pane, dropping the length before the name', async () => {
   const entry = {
     name: 'Mekong Giant Catfish',

@@ -304,7 +304,8 @@ export const hud = (s: State, props: GameProps | undefined, width: number): Hud 
         line: [
           SPACE,
           { text: ' ' },
-          ...bar(s.power, half * 2 - 4, s.power > 0.8 ? '#ff7043' : '#ffca28'),
+          // The ␣ key, a gap and the feet (always 5 cells) keep their room; the bar takes what is left.
+          ...bar(s.power, Math.min(half * 2 - 4, Math.max(3, width - 9)), s.power > 0.8 ? '#ff7043' : '#ffca28'),
           { text: ` ${castFeet(s.power)}ft`, bold: true },
         ],
       }
@@ -331,10 +332,16 @@ export const hud = (s: State, props: GameProps | undefined, width: number): Hud 
     case 'reeling': {
       const d = hookedFish(s, props)?.difficulty ?? 0.5
       const isRunning = s.runTicks > 0
-      const sprite = fishSprite(d)[0]
+      const [full] = fishSprite(d)
       // Fixed cells: ↯, the ← key, three gaps, the ␣ key, the dock, the fish, and room for the wear marks.
-      const free = Math.max(12, width - (16 + sprite.length))
-      const gauge = Math.max(6, Math.floor(free / 2))
+      // In a narrow pane the key caps give way (and then the big fish sprite), so the gauge and the track stay.
+      const isRoomy = width - (16 + full.length) >= 12
+      const sprite = isRoomy || width - (7 + full.length) >= 8 ? full : fishSprite(0)[0]
+      const free = Math.max(isRoomy ? 12 : 8, width - ((isRoomy ? 16 : 7) + sprite.length))
+      const gauge = Math.max(isRoomy ? 6 : 4, Math.floor(free / 2))
+      const shake: Segment =
+        s.shakeWarn > 0 ? { text: '↯', color: t % 2 ? '#ffeb3b' : '#ff6f00', bold: true } : { text: ' ' }
+      const track = [...reelTrack(s.progress, Math.max(isRoomy ? 4 : 3, free - gauge), sprite), ...wearMarks(s.wear, t)]
       return {
         accent:
           s.shakeWarn > 0
@@ -348,26 +355,27 @@ export const hud = (s: State, props: GameProps | undefined, width: number): Hud 
                   ? '#ff5252'
                   : '#ff8a80'
                 : tensionColor(s.tension),
-        line: [
-          ...(s.shakeWarn > 0 ? [{ text: '↯', color: t % 2 ? '#ffeb3b' : '#ff6f00', bold: true }] : [{ text: ' ' }]),
-          chip(
-            '←',
-            s.shakeWarn > 0
-              ? '#f57f17'
-              : s.tension >= ZONE_HIGH - 10 || isRunning
-                ? t % 4 < 2
-                  ? '#e53935'
-                  : '#ff8a80'
-                : undefined,
-          ),
-          { text: ' ' },
-          ...tensionGauge(s.tension, gauge),
-          { text: ' ' },
-          chip('␣', s.tension < ZONE_LOW ? '#ffb300' : undefined),
-          { text: '  ' },
-          ...reelTrack(s.progress, Math.max(4, free - gauge), sprite),
-          ...wearMarks(s.wear, t),
-        ],
+        line: !isRoomy
+          ? [shake, ...tensionGauge(s.tension, gauge), { text: ' ' }, ...track]
+          : [
+              shake,
+              chip(
+                '←',
+                s.shakeWarn > 0
+                  ? '#f57f17'
+                  : s.tension >= ZONE_HIGH - 10 || isRunning
+                    ? t % 4 < 2
+                      ? '#e53935'
+                      : '#ff8a80'
+                    : undefined,
+              ),
+              { text: ' ' },
+              ...tensionGauge(s.tension, gauge),
+              { text: ' ' },
+              chip('␣', s.tension < ZONE_LOW ? '#ffb300' : undefined),
+              { text: '  ' },
+              ...track,
+            ],
       }
     }
     case 'landed': {

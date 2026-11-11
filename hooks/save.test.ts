@@ -171,6 +171,14 @@ test('a damaged save loads as what can still be read', async () => {
   expect(toSave('nonsense')).toEqual(EMPTY_SAVE)
 })
 
+test('a damaged catch of a species still in the game keeps its weight in the total', async () => {
+  const both = recordCatch(recordCatch(EMPTY_SAVE, gill), { ...gill, id: 'g2', weightLb: 2 })
+  const { id: _, ...noId } = both.recent[0]!
+  const loaded = toSave({ ...both, recent: [noId, both.recent[1]] })
+  expect(loaded.totalCaught).toBe(2)
+  expect(loaded.totalWeightLb).toBe(2.3)
+})
+
 test('stored catches show their species as the game has it now', async () => {
   const stale = { ...gill, name: 'Blue Gill', rarity: 'rare' }
   const loaded = toSave({ ...recordCatch(EMPTY_SAVE, gill), recent: [stale], top: [stale], biggest: stale })

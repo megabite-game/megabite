@@ -75,10 +75,11 @@ export const toSave = (value: unknown): Save => {
     ),
   )
   const biggest = isCatch(stored.biggest) ? asSpeciesNow(stored.biggest) : (top[0] ?? null)
-  // Counts follow the species kept; weight is trimmed by what the dropped recent catches weighed.
+  // Counts follow the species kept; weight is trimmed by what recent catches of removed species weighed.
+  // A damaged catch of a species still in the game stays in the weight, as it stays in its species' count.
   const totalCaught = Object.values(species).reduce((sum, one) => sum + one.count, 0)
   const droppedWeight = storedRecent
-    .filter(one => !isCatch(one))
+    .filter(one => !SPECIES.some(known => known.id === (one as { species?: unknown } | null)?.species))
     .reduce((sum: number, one) => sum + (Number((one as { weightLb?: unknown } | null)?.weightLb) || 0), 0)
   const totalWeightLb = round(
     Math.max(0, (isCount(stored.totalWeightLb) ? stored.totalWeightLb : 0) - droppedWeight),

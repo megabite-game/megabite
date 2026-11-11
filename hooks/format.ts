@@ -73,7 +73,7 @@ export const formatRare = (save: Save): string => {
 }
 
 const COMMANDS =
-  'Commands: /fish, /fish dex, /fish top, /fish rare, /fish stats, /fish mute, /fish unmute, /fish help, /fish close'
+  'Commands: /fish, /fish dex, /fish top, /fish rare, /fish stats, /fish mute, /fish unmute, /fish sound, /fish help, /fish close'
 
 // A /fish option that is none of the commands: say so, rather than open the game.
 export const formatUnknown = (arg: string): string => `MegaBite has no "/fish ${arg}". ${COMMANDS}`

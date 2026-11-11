@@ -67,8 +67,9 @@ const readGameProps = async ($: EngineInterface): Promise<GameProps> => {
   }
 }
 
-// The store is the record across sessions: read fresh for each command and before each write, so two
-// sessions don't clobber each other.
+// The store is the record across sessions: read fresh for each command and before each write, so one
+// session builds on another's catches. The store has no compare-and-set, so two sessions writing in the
+// same few milliseconds can still lose one write.
 const loadSave = async ($: EngineInterface): Promise<Save> => {
   return toSave(await $.store.get(STORE_KEY))
 }
@@ -194,12 +195,13 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Claude finished: chime and flash the game, but only while the game is open.
+  // Claude finished: chime and flash the game, but only while the game is open, and not when the person
+  // stopped the turn themselves (they are at the chat already).
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId) return done
     await update($, isClaudeBusy, () => false)
-    if (await isPaneUp($)) {
+    if (e.reason !== 'aborted' && (await isPaneUp($))) {
       await update($, claudeDoneCount, n => n + 1)
       await refreshSave($)
       if (await read($, isSoundOn)) $.audio.play({ asset: CHIME }).catch(() => undefined)
@@ -232,6 +234,8 @@ export const register: Register = on => {
       if (message.type === 'bite') {
         const current = await read($, hooked)
         if (current?.id !== message.id) {
+          // A fish still on the line whose land or loss never arrived got away.
+          if (current) await escapeFish($)
           const fish = rollFish(message.distance, Math.random, message.id)
           await update($, hooked, () => fish)
         }

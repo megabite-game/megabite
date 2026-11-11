@@ -293,6 +293,31 @@ test('a pane the engine dropped no longer flashes or chimes', async ($, on) => {
   expect(played).toHaveLength(0)
 })
 
+test('a turn the person stopped neither chimes nor flashes', async ($, on) => {
+  const { played, fish } = await openGame($, on)
+  await fish('unmute')
+  await fish('')
+  const ui = await $.ui.mount(PANE)
+  await ui.advance(100)
+  await $.turn.complete({ turnId: 't1', answer: '', durationMs: 1, isAborted: true, reason: 'aborted' })
+  await ui.advance(100)
+  expect(played).toHaveLength(0)
+  expect(await gameText(ui)).not.toContain('Claude done')
+  await ui.unmount()
+})
+
+test('a new bite while an old fish is still on the line counts the old one as got away', async ($, on) => {
+  const { stored, fish } = await openGame($, on)
+  await fish('')
+  const ui = await $.ui.mount(PANE)
+  await ui.post({ type: 'bite', distance: 0.5, id: 'f1' })
+  await ui.post({ type: 'bite', distance: 0.5, id: 'f2' })
+  expect((stored.save as Save | undefined)?.totalEscaped).toBe(1)
+  await ui.post({ type: 'land', id: 'f2' })
+  expect((stored.save as Save | undefined)?.totalCaught).toBe(1)
+  await ui.unmount()
+})
+
 test('/fish options answer in text, and an unknown one does not open the game', async ($, on) => {
   const { stored, opened, fish } = await openGame($, on)
   expect(JSON.stringify(await fish('stats'))).toContain('Caught 0 (0 got away)')
