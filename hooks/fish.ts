@@ -139,11 +139,12 @@ export const pickSpecies = (distance: number, random: Random): Species => {
   })
   const total = weights.reduce((sum, w) => sum + w, 0)
   let roll = random() * total
-  for (let i = 0; i < SPECIES.length; i++) {
-    roll -= weights[i]
-    if (roll <= 0) return SPECIES[i]
+  for (const [i, one] of SPECIES.entries()) {
+    roll -= weights[i] ?? 0
+    if (roll <= 0) return one
   }
-  return SPECIES[SPECIES.length - 1]
+  // Float rounding can leave a sliver of the roll; the last species takes it. SPECIES is never empty.
+  return SPECIES[SPECIES.length - 1]!
 }
 
 // Length is log-normal around the typical size; weight follows W = a * L^3 with a little body-condition noise.
@@ -265,7 +266,7 @@ export const recordEscape = (save: Save): Save => ({ ...save, totalEscaped: save
 export const formatWeight = (lb: number): string => (lb < 1 ? `${(lb * 16).toFixed(1)} oz` : `${lb.toFixed(1)} lb`)
 export const formatLength = (inches: number): string => `${inches.toFixed(1)} in`
 
-const tierName = (rarity: Rarity): string => rarity[0].toUpperCase() + rarity.slice(1)
+const tierName = (rarity: Rarity): string => rarity.charAt(0).toUpperCase() + rarity.slice(1)
 
 // What a catch earned, biggest news first; empty when it was nothing new.
 export const catchNews = (before: Save, fish: Catch): string | null => {
@@ -350,18 +351,20 @@ export const formatStats = (save: Save): string => {
 
 // Caught species, rarest tier first and heaviest best first within a tier.
 export const rarestList = (save: Save, limit: number): RareEntry[] =>
-  SPECIES.filter(one => save.species[one.id])
-    .map(one => {
-      const best = save.species[one.id]
-      return {
+  SPECIES.flatMap(one => {
+    const best = save.species[one.id]
+    if (!best) return []
+    return [
+      {
         name: one.name,
         rarity: one.rarity,
         weightLb: best.bestWeightLb,
         lengthIn: best.bestLengthIn,
         count: best.count,
         grade: sizeGrade(one.id, best.bestWeightLb),
-      }
-    })
+      },
+    ]
+  })
     .sort((a, b) => TIER_ORDER.indexOf(b.rarity) - TIER_ORDER.indexOf(a.rarity) || b.weightLb - a.weightLb)
     .slice(0, limit)
 

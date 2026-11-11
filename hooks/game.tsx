@@ -91,7 +91,7 @@ const giveLine = (surface: ClientSurface<State>): void => {
 const nextView = (surface: ClientSurface<State>): void => {
   const s = surface.state
   if (!s || s.phase === 'bite' || s.phase === 'reeling') return
-  const view = VIEWS[(VIEWS.indexOf(s.view) + 1) % VIEWS.length]
+  const view = VIEWS[(VIEWS.indexOf(s.view) + 1) % VIEWS.length] ?? 'fish'
   if (s.view === 'fish') surface.setState({ ...initial(), tick: s.tick, view })
   else surface.setState({ ...s, view })
 }
@@ -243,9 +243,10 @@ const scene = (s: State, props: GameProps, width: number): Segment[][] => {
     Array.from({ length: width }, (_, c) => ({ text: ' ', bg: bgFor(r, c) }) as Segment),
   )
   const put = (r: number, c: number, text: string, color?: string, bold?: boolean): void => {
+    const row = rows[r]
+    if (!row) return
     for (let i = 0; i < text.length; i++) {
-      if (r >= 0 && r < SCENE_ROWS && c + i >= 0 && c + i < width)
-        rows[r][c + i] = { text: text[i], color, bold, bg: bgFor(r, c + i) }
+      if (c + i >= 0 && c + i < width) row[c + i] = { text: text.charAt(i), color, bold, bg: bgFor(r, c + i) }
     }
   }
   // A line between two cells, ends excluded; `gap` 2 draws every other cell so a long line stays light.

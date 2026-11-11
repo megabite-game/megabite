@@ -108,8 +108,8 @@ test('the record is the heaviest catch', async () => {
   })
   expect(three.biggest?.id).toBe('b')
   expect(three.totalCaught).toBe(3)
-  expect(three.species['largemouth-bass'].count).toBe(1)
-  expect(three.recent[0].id).toBe('c')
+  expect(three.species['largemouth-bass']?.count).toBe(1)
+  expect(three.recent[0]?.id).toBe('c')
 })
 
 test('a landed fish is saved to the store and shown in the pane', async ($, on) => {
@@ -142,7 +142,7 @@ test('a landed fish is saved to the store and shown in the pane', async ($, on) 
   await ui.post({ type: 'land', id: seen.fish?.id ?? '' })
 
   expect(seen.saved?.totalCaught).toBe(1)
-  expect(seen.saved?.recent[0].id).toBe(seen.fish?.id)
+  expect(seen.saved?.recent[0]?.id).toBe(seen.fish?.id)
   // The first catch is always the heaviest so far.
   expect(toasts[0]).toMatch(/MegaBite record/)
   expect(JSON.stringify(await ui.drawn())).toContain('1/50')
@@ -289,7 +289,7 @@ test('top keeps the ten heaviest, heaviest first', async () => {
   let save = EMPTY_SAVE
   for (let i = 0; i < 12; i++) save = recordCatch(save, { ...gill, id: `g${i}`, weightLb: i + 1 })
   expect(save.top).toHaveLength(10)
-  expect(save.top[0].weightLb).toBe(12)
+  expect(save.top[0]?.weightLb).toBe(12)
   expect(formatTop(save).split('\n')[0]).toContain('(top 10)')
   expect(formatTop(save).split('\n')[1]).toMatch(/^ +1\. Bluegill/)
 })
