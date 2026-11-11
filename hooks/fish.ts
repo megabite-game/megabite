@@ -113,7 +113,8 @@ const RARITY_WEIGHT: Record<Rarity, number> = {
   legendary: 2,
 }
 
-const TROPHY_CHANCE = 0.04
+// Now and then a fish runs well past typical length; its size tag still comes from its weight (sizeGrade).
+const BONUS_SIZE_CHANCE = 0.04
 
 export type Random = () => number
 
@@ -152,9 +153,9 @@ export const pickSpecies = (distance: number, random: Random): Species => {
 // Length is log-normal around the typical size; weight follows W = a * L^3 with a little body-condition noise.
 export const rollFish = (distance: number, random: Random, id: string): Hooked => {
   const species = pickSpecies(distance, random)
-  const isTrophy = random() < TROPHY_CHANCE
+  const isBonusSize = random() < BONUS_SIZE_CHANCE
   let length = species.lengthIn * Math.exp(0.18 * gaussian(random))
-  if (isTrophy) length *= 1.3 + random() * 0.4
+  if (isBonusSize) length *= 1.3 + random() * 0.4
   length = Math.min(species.maxLengthIn, Math.max(species.lengthIn * 0.4, length))
   const a = species.weightLb / species.lengthIn ** 3
   const condition = 0.88 + random() * 0.24
@@ -168,13 +169,14 @@ export const rollFish = (distance: number, random: Random, id: string): Hooked =
     rarity: species.rarity,
     lengthIn: round(length, 1),
     weightLb: round(weight, weight < 1 ? 3 : 2),
-    isTrophy,
     difficulty: round(Math.min(1, species.fight * 0.8 + sizeFactor * 0.3), 2),
   }
 }
 
 // Graded against the species, as state trophy programs do: 1.3× typical weight is big,
 // 2× is a trophy, and 80% of the heaviest the species can roll is record class.
+// Where a species' typical size is already near its record (Arapaima, Coelacanth, Mekong Giant Catfish),
+// record class starts below 2×, so those go from BIG straight to RECORD. That is on purpose.
 export const sizeGrade = (speciesId: string, weightLb: number): SizeGrade | null => {
   const species = SPECIES.find(one => one.id === speciesId)
   if (!species) return null

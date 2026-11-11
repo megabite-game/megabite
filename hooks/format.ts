@@ -72,6 +72,12 @@ export const formatRare = (save: Save): string => {
   ].join('\n')
 }
 
+const COMMANDS =
+  'Commands: /fish, /fish dex, /fish top, /fish rare, /fish stats, /fish mute, /fish unmute, /fish help, /fish close'
+
+// A /fish option that is none of the commands: say so, rather than open the game.
+export const formatUnknown = (arg: string): string => `MegaBite has no "/fish ${arg}". ${COMMANDS}`
+
 export const formatHelp = (): string =>
   [
     'MegaBite help',
@@ -88,7 +94,7 @@ export const formatHelp = (): string =>
     '  BIG        1.3× typical or more',
     '  TROPHY     2× typical or more',
     '  ★ RECORD   near the heaviest that species gets',
-    'Commands: /fish dex, /fish top, /fish rare, /fish stats, /fish mute, /fish unmute, /fish help, /fish close',
+    COMMANDS,
   ].join('\n')
 
 // One line for the transcript when the pane closes; null when nothing happened.

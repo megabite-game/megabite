@@ -11,7 +11,6 @@ export type Hooked = {
   rarity: Rarity
   lengthIn: number
   weightLb: number
-  isTrophy: boolean
   // 0 (easy) to 1 (fights hard); the only thing the game shows before landing.
   difficulty: number
 }
@@ -23,7 +22,6 @@ export type Catch = {
   rarity: Rarity
   lengthIn: number
   weightLb: number
-  isTrophy: boolean
   caughtAt: string
 }
 
@@ -55,7 +53,6 @@ export type Outing = {
   best: Catch | null
 }
 
-// What the pane hands the game's surface module.
 // One caught species in the rarest list: its tier and its best catch.
 export type RareEntry = {
   name: string
@@ -66,6 +63,16 @@ export type RareEntry = {
   grade: SizeGrade | null
 }
 
+// What the game's surface module posts to the hooks module. The game names each fish at the bite,
+// so a land or a loss always points at the fish it means.
+export type GameMessage =
+  | { type: 'bite'; distance: number; id: string }
+  | { type: 'land'; id: string }
+  | { type: 'lost'; id: string }
+  | { type: 'close' }
+  | { type: 'sound' }
+
+// What the pane hands the game's surface module.
 export type GameProps = {
   hooked: { id: string; difficulty: number; rarity: Rarity } | null
   last: Catch | null

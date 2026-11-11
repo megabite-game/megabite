@@ -1,12 +1,42 @@
 import type { GameProps, RareEntry, SizeGrade } from '../types'
 import { formatLength, formatWeight, GRADE_COLOR, GRADE_LABEL, RARITY_COLOR } from './fish'
-import { BITE_WINDOW, FLIGHT_TICKS } from './play'
+import { BITE_WINDOW, FLIGHT_TICKS, hookedFish } from './play'
 import type { State, View } from './play'
 import { HOOK_FLASH, ZONE_HIGH, ZONE_LOW } from './reel'
 
 // Drawing the game as rows of styled text: the scene, the one-line HUD and the records views. No state changes here.
 
 export type Segment = { text: string; color?: string; bg?: string; bold?: boolean }
+
+// Cells a row of segments takes.
+export const lineWidth = (line: Segment[]): number => line.reduce((sum, seg) => sum + [...seg.text].length, 0)
+
+// Cut a row to `room` cells, ending in … where it was cut.
+export const fit = (line: Segment[], room: number): Segment[] => {
+  if (lineWidth(line) <= room) return line
+  const out: Segment[] = []
+  let left = Math.max(0, room - 1)
+  for (const seg of line) {
+    const chars = [...seg.text]
+    if (chars.length > left) {
+      if (left > 0) out.push({ ...seg, text: chars.slice(0, left).join('') })
+      break
+    }
+    out.push(seg)
+    left -= chars.length
+  }
+  return [...out, { text: '…', color: '#78909c' }]
+}
+
+// Whole groups of segments, in order, as many as fit in `room`.
+const groupsThatFit = (groups: Segment[][], room: number): Segment[] => {
+  const out: Segment[] = []
+  for (const group of groups) {
+    if (lineWidth(out) + lineWidth(group) > room) break
+    out.push(...group)
+  }
+  return out
+}
 
 const DOCK = 7
 
@@ -168,7 +198,7 @@ export const scene = (s: State, props: GameProps, width: number): Segment[][] =>
   }
 
   if (s.phase === 'reeling') {
-    const d = props.hooked?.difficulty ?? 0.5
+    const d = hookedFish(s, props)?.difficulty ?? 0.5
     const isRunning = s.runTicks > 0
     const [toDock, fleeing] = fishSprite(d)
     const wiggle = isRunning ? (t % 2 ? 1 : -1) : t % 6 < 3 ? 0 : 1
@@ -214,15 +244,14 @@ const tensionGauge = (tension: number, width: number): Segment[] => {
   return runs(cells)
 }
 
-// The fish's way back to the dock: reeled line, the fish, then open water.
-const reelTrack = (progress: number, width: number, sprite: string): Segment[] => {
-  const room = Math.max(1, width - sprite.length)
-  const at = Math.round((1 - progress / 100) * room)
+// The fish's way back to the dock: reeled line, the fish, then open water; `water` cells besides the fish.
+const reelTrack = (progress: number, water: number, sprite: string): Segment[] => {
+  const at = Math.round((1 - progress / 100) * water)
   return [
     { text: '▐', color: DOCK_COLOR },
     { text: '─'.repeat(at), color: '#26c6da' },
     { text: sprite, color: '#ffffff', bold: true },
-    { text: '·'.repeat(Math.max(0, room - at)), color: '#455a64' },
+    { text: '·'.repeat(Math.max(0, water - at)), color: '#455a64' },
   ]
 }
 
@@ -252,7 +281,7 @@ const gradeTag = (grade: SizeGrade | null): Segment[] =>
 
 export type Hud = { line: Segment[]; accent: string }
 
-// One line of icons and bars; the border colour carries the mood.
+// One line of icons and bars, at most `width` cells; the border colour carries the mood.
 export const hud = (s: State, props: GameProps | undefined, width: number): Hud => {
   const t = s.tick
   const half = Math.max(8, Math.floor((width - 10) / 2))
@@ -260,7 +289,14 @@ export const hud = (s: State, props: GameProps | undefined, width: number): Hud 
     case 'idle':
       return {
         accent: '#546e7a',
-        line: [SPACE, dim(' cast  '), chip('tab'), dim(' records  '), chip('esc'), dim(' close')],
+        line: groupsThatFit(
+          [
+            [SPACE, dim(' cast')],
+            [dim('  '), chip('tab'), dim(' records')],
+            [dim('  '), chip('esc'), dim(' close')],
+          ],
+          width,
+        ),
       }
     case 'charging':
       return {
@@ -293,8 +329,12 @@ export const hud = (s: State, props: GameProps | undefined, width: number): Hud 
         ],
       }
     case 'reeling': {
-      const d = props?.hooked?.difficulty ?? 0.5
+      const d = hookedFish(s, props)?.difficulty ?? 0.5
       const isRunning = s.runTicks > 0
+      const sprite = fishSprite(d)[0]
+      // Fixed cells: ↯, the ← key, three gaps, the ␣ key, the dock, the fish, and room for the wear marks.
+      const free = Math.max(12, width - (16 + sprite.length))
+      const gauge = Math.max(6, Math.floor(free / 2))
       return {
         accent:
           s.shakeWarn > 0
@@ -321,11 +361,11 @@ export const hud = (s: State, props: GameProps | undefined, width: number): Hud 
                 : undefined,
           ),
           { text: ' ' },
-          ...tensionGauge(s.tension, Math.max(8, half - 6)),
+          ...tensionGauge(s.tension, gauge),
           { text: ' ' },
           chip('␣', s.tension < ZONE_LOW ? '#ffb300' : undefined),
           { text: '  ' },
-          ...reelTrack(s.progress, half, fishSprite(d)[0]),
+          ...reelTrack(s.progress, Math.max(4, free - gauge), sprite),
           ...wearMarks(s.wear, t),
         ],
       }
@@ -334,13 +374,18 @@ export const hud = (s: State, props: GameProps | undefined, width: number): Hud 
       const caught = props?.last && props.last.id === s.landedId ? props.last : null
       if (!caught) return { accent: '#66bb6a', line: [dim('…')] }
       const color = RARITY_COLOR[caught.rarity]
+      const tag = gradeTag(props?.lastGrade ?? null)
+      const stats = ` ${formatWeight(caught.weightLb)} ${formatLength(caught.lengthIn)}`
+      // A long name gives way so the weight and length stay on the line.
+      const nameRoom = Math.max(4, width - 2 - lineWidth(tag) - stats.length)
+      const name = caught.name.length > nameRoom ? `${caught.name.slice(0, nameRoom - 1)}…` : caught.name
       return {
         accent: color,
         line: [
           { text: '✓ ', color: '#66bb6a', bold: true },
-          ...gradeTag(props?.lastGrade ?? null),
-          { text: caught.name, color, bold: true },
-          { text: ` ${formatWeight(caught.weightLb)} ${formatLength(caught.lengthIn)}`, bold: true },
+          ...tag,
+          { text: name, color, bold: true },
+          { text: stats, bold: true },
         ],
       }
     }
@@ -372,16 +417,43 @@ export const listRows = (list: RareEntry[], width: number): Segment[][] => {
 }
 
 // The records views' footer: every view named, the current one highlighted, Tab to move on.
+// Where that does not fit in `room`, only the current view is named.
 export const VIEW_TAB: Record<View, { label: string; color: string }> = {
   rare: { label: '◆ Rarest', color: '#ba68c8' },
   heavy: { label: '⚖ Heaviest', color: '#ff7043' },
   fish: { label: '~ Water', color: '#42a5f5' },
 }
-export const tabBar = (current: View): Segment[] => [
-  ...(['rare', 'heavy', 'fish'] as const).flatMap((view): Segment[] =>
-    view === current
-      ? [{ text: ` ${VIEW_TAB[view].label} `, color: '#ffffff', bg: VIEW_TAB[view].color, bold: true }, { text: ' ' }]
-      : [dim(` ${VIEW_TAB[view].label} `), { text: ' ' }],
-  ),
-  dim(' tab ↹'),
-]
+export const tabBar = (current: View, room: number): Segment[] => {
+  const lit = (view: View): Segment => ({
+    text: ` ${VIEW_TAB[view].label} `,
+    color: '#ffffff',
+    bg: VIEW_TAB[view].color,
+    bold: true,
+  })
+  const full = [
+    ...(['rare', 'heavy', 'fish'] as const).flatMap((view): Segment[] =>
+      view === current ? [lit(view), { text: ' ' }] : [dim(` ${VIEW_TAB[view].label} `), { text: ' ' }],
+    ),
+    dim(' tab ↹'),
+  ]
+  return lineWidth(full) <= room ? full : [lit(current), dim('  tab ↹')]
+}
+
+const BUSY: Segment = { text: '◌', color: '#ffca28' }
+const READY: Segment = { text: '✓', color: '#66bb6a' }
+const DONE: Segment = { text: ' ✓ Claude done ', color: '#ffffff', bg: '#2e7d32', bold: true }
+// The short flash, mid-fight or in a narrow pane, where the HUD needs the room.
+const DONE_SHORT: Segment = { ...DONE, text: ' ✓ ' }
+
+export type Footer = { accent: string; line: Segment[]; badge: Segment }
+
+// The bottom row: the HUD (or the records tabs) on the left and Claude's state on the right, one gap
+// between, never wider than `width`.
+export const footer = (s: State, props: GameProps | undefined, width: number, isFlashing: boolean): Footer => {
+  const isFighting = s.phase === 'bite' || s.phase === 'reeling'
+  const badge = props?.isClaudeBusy ? BUSY : !isFlashing ? READY : isFighting || width < 40 ? DONE_SHORT : DONE
+  const room = width - lineWidth([badge]) - 1
+  const panel: Hud =
+    s.view === 'fish' ? hud(s, props, room) : { accent: VIEW_TAB[s.view].color, line: tabBar(s.view, room) }
+  return { accent: panel.accent, line: fit(panel.line, room), badge }
+}

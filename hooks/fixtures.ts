@@ -17,7 +17,6 @@ export const trout = {
   rarity: 'legendary',
   lengthIn: 11,
   weightLb: 0.7,
-  isTrophy: false,
   caughtAt,
 } as const
 export const tuna = {
@@ -27,7 +26,6 @@ export const tuna = {
   rarity: 'epic',
   lengthIn: 82,
   weightLb: 430,
-  isTrophy: false,
   caughtAt,
 } as const
 export const gill = {
@@ -37,6 +35,5 @@ export const gill = {
   rarity: 'common',
   lengthIn: 7,
   weightLb: 0.3,
-  isTrophy: false,
   caughtAt,
 } as const

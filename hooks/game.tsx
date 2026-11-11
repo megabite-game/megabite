@@ -1,9 +1,9 @@
 import type { ClientModule } from 'claude-code'
 
 import type { GameProps } from '../types'
-import { hud, listRows, scene, tabBar, VIEW_TAB } from './draw'
-import type { Hud, Segment } from './draw'
-import { giveLine, initial, isAction, latest, nextView, press, tick, TICK_MS } from './play'
+import { footer, listRows, scene } from './draw'
+import type { Segment } from './draw'
+import { giveLine, initial, isAction, latest, nextView, press, send, tick, TICK_MS } from './play'
 import type { State } from './play'
 
 // The Claude-done count each game last saw, and the tick its flash ends.
@@ -18,9 +18,9 @@ const Game: ClientModule<GameProps, State> = (props, surface) => {
     surface.onKey(event => {
       if (isAction(event.key)) press(surface)
       else if (event.key === 'left') giveLine(surface)
-      else if (event.key === 'q') surface.post({ type: 'close' })
+      else if (event.key === 'q') send(surface, { type: 'close' })
       else if (event.key === 'tab') nextView(surface)
-      else if (event.key === 'm') surface.post({ type: 'sound' })
+      else if (event.key === 'm') send(surface, { type: 'sound' })
     })
     surface.setState(initial())
     return <Text dimColor>…</Text>
@@ -34,7 +34,7 @@ const Game: ClientModule<GameProps, State> = (props, surface) => {
   else if (props.claudeDoneCount !== seen.count)
     doneSeen.set(surface, { count: props.claudeDoneCount, flashUntil: s.tick + 30 })
   const isFlashing = (doneSeen.get(surface)?.flashUntil ?? 0) > s.tick
-  const panel: Hud = s.view === 'fish' ? hud(s, props, width) : { accent: VIEW_TAB[s.view].color, line: tabBar(s.view) }
+  const bottom = footer(s, props, width, isFlashing)
 
   const row = (line: Segment[]) => (
     <Box flexDirection="row">
@@ -50,7 +50,7 @@ const Game: ClientModule<GameProps, State> = (props, surface) => {
     <Box
       flexDirection="column"
       borderStyle="round"
-      borderColor={isFlashing ? (s.tick % 4 < 2 ? '#66bb6a' : '#b9f6ca') : panel.accent}
+      borderColor={isFlashing ? (s.tick % 4 < 2 ? '#66bb6a' : '#b9f6ca') : bottom.accent}
       paddingX={1}
     >
       {(s.view === 'rare'
@@ -60,16 +60,8 @@ const Game: ClientModule<GameProps, State> = (props, surface) => {
           : scene(s, props, width)
       ).map(row)}
       <Box flexDirection="row" justifyContent="space-between">
-        {row(panel.line)}
-        {props.isClaudeBusy ? (
-          <Text color="#ffca28">◌</Text>
-        ) : isFlashing ? (
-          <Text color="#ffffff" backgroundColor="#2e7d32" weight="bold">
-            {' ✓ Claude done '}
-          </Text>
-        ) : (
-          <Text color="#66bb6a">✓</Text>
-        )}
+        {row(bottom.line)}
+        {row([bottom.badge])}
       </Box>
     </Box>
   )

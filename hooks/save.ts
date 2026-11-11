@@ -1,4 +1,4 @@
-import type { Catch, Hooked, Outing, RareEntry, Rarity, Save, SizeGrade } from '../types'
+import type { Catch, Hooked, Outing, RareEntry, Rarity, Save, SizeGrade, SpeciesRecord } from '../types'
 import { formatWeight, GRADE_LABEL, round, sizeGrade, SPECIES, TIER_ORDER, tierName } from './fish'
 
 // The catch log kept across sessions: recording catches and escapes, reading old saves, and the lists built from it.
@@ -20,35 +20,71 @@ export const TOP_LIMIT = 10
 
 const byWeight = (a: Catch, b: Catch): number => b.weightLb - a.weightLb
 
-const isKnown = (fish: Catch): boolean => SPECIES.some(one => one.id === fish.species)
+const GRADES: readonly SizeGrade[] = ['big', 'trophy', 'record']
 
-// Accept a stored save, filling fields an earlier version did not keep and dropping
-// catches of species no longer in the game (the old joke fish).
+const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0
+
+// A stored catch the game can still show: the fields it reads, of a species still in the game.
+const isCatch = (value: unknown): value is Catch => {
+  if (typeof value !== 'object' || value === null) return false
+  const one = value as Partial<Catch>
+  return (
+    typeof one.id === 'string' &&
+    typeof one.name === 'string' &&
+    typeof one.rarity === 'string' &&
+    isCount(one.weightLb) &&
+    isCount(one.lengthIn) &&
+    SPECIES.some(known => known.id === one.species)
+  )
+}
+
+const isRecord = (value: unknown): value is SpeciesRecord =>
+  typeof value === 'object' &&
+  value !== null &&
+  isCount((value as SpeciesRecord).count) &&
+  isCount((value as SpeciesRecord).bestWeightLb) &&
+  isCount((value as SpeciesRecord).bestLengthIn)
+
+// Accept a stored save, filling fields an earlier version did not keep and dropping catches of species
+// no longer in the game (the old joke fish) or entries too damaged to read.
 export const toSave = (value: unknown): Save => {
   if (typeof value !== 'object' || value === null || (value as { version?: unknown }).version !== 1) return EMPTY_SAVE
-  const stored = value as Partial<Save>
-  const recent = (stored.recent ?? []).filter(isKnown)
+  const stored = value as Record<keyof Save, unknown>
+  const storedRecent: unknown[] = Array.isArray(stored.recent) ? stored.recent : []
+  const recent = storedRecent.filter(isCatch)
   // Rebuild the top list from both lists so a dropped entry is refilled from recent catches.
-  const pool = new Map([...(stored.top ?? []), ...recent].filter(isKnown).map(one => [one.id, one]))
+  const storedTop: unknown[] = Array.isArray(stored.top) ? stored.top : []
+  const pool = new Map([...storedTop, ...recent].filter(isCatch).map(one => [one.id, one]))
   const top = [...pool.values()].sort(byWeight).slice(0, TOP_LIMIT)
+  const storedSpecies = typeof stored.species === 'object' && stored.species !== null ? stored.species : {}
   const species = Object.fromEntries(
-    Object.entries(stored.species ?? {}).filter(([id]) => SPECIES.some(one => one.id === id)),
+    Object.entries(storedSpecies).filter(
+      (entry): entry is [string, SpeciesRecord] => SPECIES.some(one => one.id === entry[0]) && isRecord(entry[1]),
+    ),
   )
-  const biggest = stored.biggest && isKnown(stored.biggest) ? stored.biggest : (top[0] ?? null)
+  const biggest = isCatch(stored.biggest) ? stored.biggest : (top[0] ?? null)
   // Counts follow the species kept; weight is trimmed by what the dropped recent catches weighed.
   const totalCaught = Object.values(species).reduce((sum, one) => sum + one.count, 0)
-  const droppedWeight = (stored.recent ?? []).filter(one => !isKnown(one)).reduce((sum, one) => sum + one.weightLb, 0)
-  const totalWeightLb = round(Math.max(0, (stored.totalWeightLb ?? 0) - droppedWeight), 2)
+  const droppedWeight = storedRecent
+    .filter(one => !isCatch(one))
+    .reduce((sum: number, one) => sum + (Number((one as { weightLb?: unknown } | null)?.weightLb) || 0), 0)
+  const totalWeightLb = round(
+    Math.max(0, (isCount(stored.totalWeightLb) ? stored.totalWeightLb : 0) - droppedWeight),
+    2,
+  )
+  const seenGrades = Array.isArray(stored.seenGrades)
+    ? GRADES.filter(grade => (stored.seenGrades as unknown[]).includes(grade))
+    : []
   return {
-    ...EMPTY_SAVE,
-    ...stored,
-    recent,
-    top,
+    version: 1,
+    totalCaught,
+    totalEscaped: isCount(stored.totalEscaped) ? stored.totalEscaped : 0,
+    totalWeightLb,
     species,
     biggest,
-    totalCaught,
-    totalWeightLb,
-    seenGrades: stored.seenGrades ?? [],
+    recent,
+    top,
+    seenGrades,
   }
 }
 
@@ -167,7 +203,6 @@ export const landFish = (
     rarity: fish.rarity,
     lengthIn: fish.lengthIn,
     weightLb: fish.weightLb,
-    isTrophy: fish.isTrophy,
     caughtAt,
   }
   const intro = gradeIntro(before, caught)

@@ -1,9 +1,9 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { GameProps, Outing, Save } from '../types'
+import type { GameMessage, GameProps, Outing, Save } from '../types'
 import { formatWeight, GRADE_COLOR, GRADE_LABEL, RARITY_COLOR, rollFish, sizeGrade, SPECIES } from './fish'
-import { formatDex, formatHelp, formatOuting, formatRare, formatStats, formatTop } from './format'
+import { formatDex, formatHelp, formatOuting, formatRare, formatStats, formatTop, formatUnknown } from './format'
 import {
   addCatchToOuting,
   EMPTY_OUTING,
@@ -34,22 +34,19 @@ const isSoundOn = atom({ plugin: 'megabite', key: 'isSoundOn' } as const, false)
 const CHIME = 'sounds/done.wav'
 const SOUND_KEY = 'sound'
 
-type GameMessage =
-  | { type: 'bite'; distance: number }
-  | { type: 'land'; id: string }
-  | { type: 'lost'; id: string }
-  | { type: 'close' }
-  | { type: 'sound' }
+const isFishId = (id: unknown): id is string => typeof id === 'string' && id.length > 0 && id.length <= 64
 
 const isGameMessage = (data: unknown): data is GameMessage => {
   if (typeof data !== 'object' || data === null) return false
   const { type, distance, id } = data as { type?: unknown; distance?: unknown; id?: unknown }
-  if (type === 'bite') return typeof distance === 'number' && Number.isFinite(distance)
-  if (type === 'land' || type === 'lost') return typeof id === 'string'
+  if (type === 'bite') return typeof distance === 'number' && Number.isFinite(distance) && isFishId(id)
+  if (type === 'land' || type === 'lost') return isFishId(id)
   return type === 'close' || type === 'sound'
 }
 
-const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+// The engine's record of open panes, not ours: a pane the engine dropped (a reload) is gone from it
+// even though no `ui.close` hook of ours ran.
+const isPaneUp = async ($: EngineInterface): Promise<boolean> => (await $.ui.panes()).some(pane => pane.id === PANE)
 
 // What the game is handed: the session's values, with the hooked fish cut to what it may see before landing.
 const readGameProps = async ($: EngineInterface): Promise<GameProps> => {
@@ -80,6 +77,15 @@ const toggleSound = async ($: EngineInterface, to?: boolean): Promise<string> =>
   await update($, isSoundOn, () => on)
   await $.store.set(SOUND_KEY, on)
   return on ? 'MegaBite unmuted: a chime plays when Claude finishes.' : 'MegaBite muted.'
+}
+
+// The fish on the line got away: count it in the save and the outing, and let it go.
+const escapeFish = async ($: EngineInterface): Promise<void> => {
+  const next = recordEscape(await loadSave($))
+  await $.store.set(STORE_KEY, next)
+  await update($, save, () => next)
+  await update($, hooked, () => null)
+  await update($, outing, (current: Outing) => ({ ...current, escaped: current.escaped + 1 }))
 }
 
 export const register: Register = on => {
@@ -116,7 +122,8 @@ export const register: Register = on => {
       return {
         text: `MegaBite is ${(await read($, isSoundOn)) ? 'unmuted' : 'muted'}. /fish mute or /fish unmute to change it.`,
       }
-    if (!(await read($, isOpen))) await update($, outing, () => EMPTY_OUTING)
+    if (arg !== '') return { text: formatUnknown(arg) }
+    if (!(await isPaneUp($))) await update($, outing, () => EMPTY_OUTING)
     await $.ui.open({ id: PANE, title: TITLE, focus: true, closeOnEscape: true, rows: 10, columns: 48 })
     await update($, isOpen, () => true)
     return {
@@ -135,7 +142,7 @@ export const register: Register = on => {
     const done = await next(e)
     if (e.agentId) return done
     await update($, isClaudeBusy, () => false)
-    if (await read($, isOpen)) {
+    if (await isPaneUp($)) {
       await update($, claudeDoneCount, n => n + 1)
       if (await read($, isSoundOn)) $.audio.play({ asset: CHIME }).catch(() => undefined)
     }
@@ -143,9 +150,11 @@ export const register: Register = on => {
   })
 
   // However the pane closes (Esc, q, the ✕, /fish close), log a one-line recap of the outing.
+  // A fish still on the line got away.
   on('ui.close', async ($, e, next) => {
     const closed = await next(e)
     if (e.id === PANE && (await read($, isOpen))) {
+      if (await read($, hooked)) await escapeFish($)
       const recap = formatOuting(await read($, outing))
       if (recap) $.ui.log(recap)
       await update($, isOpen, () => false)
@@ -167,9 +176,13 @@ export const register: Register = on => {
       return {}
     }
 
+    // The game posts until the props show a message arrived, so a repeat changes nothing.
     if (message.type === 'bite') {
-      const fish = rollFish(message.distance, Math.random, newId())
-      await update($, hooked, () => fish)
+      const current = await read($, hooked)
+      if (current?.id !== message.id) {
+        const fish = rollFish(message.distance, Math.random, message.id)
+        await update($, hooked, () => fish)
+      }
     }
 
     if (message.type === 'land') {
@@ -187,13 +200,7 @@ export const register: Register = on => {
 
     if (message.type === 'lost') {
       const fish = await read($, hooked)
-      if (fish && fish.id === message.id) {
-        const next = recordEscape(await loadSave($))
-        await $.store.set(STORE_KEY, next)
-        await update($, save, () => next)
-        await update($, hooked, () => null)
-        await update($, outing, (current: Outing) => ({ ...current, escaped: current.escaped + 1 }))
-      }
+      if (fish && fish.id === message.id) await escapeFish($)
     }
 
     return { props: await readGameProps($) }

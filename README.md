@@ -61,6 +61,8 @@ claude plugin test /path/to/megabite    # run the tests
 claude plugin validate /path/to/megabite
 ```
 
+Type checking needs the plugin API's types, which Claude Code writes to `.claude-plugin/types/` (not committed) when it loads the plugin from this folder. Run `claude --plugin-dir .` once, then `npx tsc -p .`.
+
 Pull requests are welcome.
 
 ## License

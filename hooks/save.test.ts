@@ -6,7 +6,7 @@ import { formatHelp, formatRare, formatTop } from './format'
 import { catchNews, EMPTY_SAVE, gradeIntro, landFish, rarest, recordCatch, toSave } from './save'
 
 test('the record is the heaviest catch', async () => {
-  const base = { rarity: 'common', isTrophy: false, caughtAt: '2026-11-11T00:00:00.000Z' } as const
+  const base = { rarity: 'common', caughtAt: '2026-11-11T00:00:00.000Z' } as const
   const one = recordCatch(EMPTY_SAVE, {
     ...base,
     id: 'a',
@@ -109,7 +109,6 @@ test('landing a fish records it, says what is new, and explains a first size tag
     rarity: 'common',
     lengthIn: 22,
     weightLb: 5,
-    isTrophy: true,
     difficulty: 0.4,
   }
   const first = landFish(EMPTY_SAVE, hooked, '2026-11-11T00:00:00.000Z')
@@ -120,7 +119,6 @@ test('landing a fish records it, says what is new, and explains a first size tag
     rarity: 'common',
     lengthIn: 22,
     weightLb: 5,
-    isTrophy: true,
     caughtAt: '2026-11-11T00:00:00.000Z',
   })
   expect(first.isNewSpecies).toBe(true)
@@ -134,4 +132,28 @@ test('landing a fish records it, says what is new, and explains a first size tag
   expect(second.isNewSpecies).toBe(false)
   expect(second.news).toBe('')
   expect(second.save.seenGrades).toEqual(['trophy'])
+})
+
+test('a damaged save loads as what can still be read', async () => {
+  const damaged = {
+    version: 1,
+    totalCaught: 'many',
+    totalEscaped: -3,
+    totalWeightLb: null,
+    species: { bluegill: { count: 2, bestWeightLb: 0.4, bestLengthIn: 8 }, 'yellow-perch': 'x' },
+    biggest: {},
+    recent: [null, 5, gill, { ...gill, id: 'g2', weightLb: 'heavy' }],
+    top: 'none',
+    seenGrades: ['big', 'huge'],
+  }
+  const loaded = toSave(damaged)
+  expect(loaded.recent.map(one => one.id)).toEqual(['g1'])
+  expect(loaded.top.map(one => one.id)).toEqual(['g1'])
+  expect(loaded.biggest?.id).toBe('g1')
+  expect(Object.keys(loaded.species)).toEqual(['bluegill'])
+  expect(loaded.totalCaught).toBe(2)
+  expect(loaded.totalEscaped).toBe(0)
+  expect(loaded.totalWeightLb).toBe(0)
+  expect(loaded.seenGrades).toEqual(['big'])
+  expect(toSave('nonsense')).toEqual(EMPTY_SAVE)
 })
