@@ -2,31 +2,20 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { GameProps, Outing, Save } from '../types'
+import { formatWeight, GRADE_COLOR, GRADE_LABEL, RARITY_COLOR, rollFish, sizeGrade, SPECIES } from './fish'
+import { formatDex, formatHelp, formatOuting, formatRare, formatStats, formatTop } from './format'
 import {
   addCatchToOuting,
   EMPTY_OUTING,
   EMPTY_SAVE,
-  formatOuting,
-  formatDex,
-  formatHelp,
-  formatRare,
-  formatStats,
-  formatTop,
-  formatWeight,
-  GRADE_COLOR,
-  GRADE_LABEL,
   heaviestList,
   landFish,
   rarest,
   rarestList,
-  RARITY_COLOR,
-  sizeGrade,
   recordEscape,
-  rollFish,
-  SPECIES,
   speciesFound,
   toSave,
-} from './fish'
+} from './save'
 
 const PANE = 'megabite'
 const TITLE = 'MegaBite'
@@ -54,8 +43,10 @@ type GameMessage =
 
 const isGameMessage = (data: unknown): data is GameMessage => {
   if (typeof data !== 'object' || data === null) return false
-  const type = (data as { type?: unknown }).type
-  return type === 'bite' || type === 'land' || type === 'lost' || type === 'close' || type === 'sound'
+  const { type, distance, id } = data as { type?: unknown; distance?: unknown; id?: unknown }
+  if (type === 'bite') return typeof distance === 'number' && Number.isFinite(distance)
+  if (type === 'land' || type === 'lost') return typeof id === 'string'
+  return type === 'close' || type === 'sound'
 }
 
 const newId = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
