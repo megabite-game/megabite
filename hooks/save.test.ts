@@ -1,0 +1,137 @@
+import { expect, test } from 'claude-code/testing'
+
+import type { Hooked } from '../types'
+import { gill, trout, tuna } from './fixtures'
+import { formatHelp, formatRare, formatTop } from './format'
+import { catchNews, EMPTY_SAVE, gradeIntro, landFish, rarest, recordCatch, toSave } from './save'
+
+test('the record is the heaviest catch', async () => {
+  const base = { rarity: 'common', isTrophy: false, caughtAt: '2026-11-11T00:00:00.000Z' } as const
+  const one = recordCatch(EMPTY_SAVE, {
+    ...base,
+    id: 'a',
+    species: 'largemouth-bass',
+    name: 'Largemouth Bass',
+    lengthIn: 14,
+    weightLb: 1.5,
+  })
+  const two = recordCatch(one, {
+    ...base,
+    id: 'b',
+    species: 'common-carp',
+    name: 'Common Carp',
+    lengthIn: 20,
+    weightLb: 5,
+  })
+  const three = recordCatch(two, {
+    ...base,
+    id: 'c',
+    species: 'bluegill',
+    name: 'Bluegill',
+    lengthIn: 7,
+    weightLb: 0.3,
+  })
+  expect(three.biggest?.id).toBe('b')
+  expect(three.totalCaught).toBe(3)
+  expect(three.species['largemouth-bass']?.count).toBe(1)
+  expect(three.recent[0]?.id).toBe('c')
+})
+
+test('a small legendary is the rarest while the tuna stays the heaviest', async () => {
+  const save = recordCatch(recordCatch(EMPTY_SAVE, tuna), trout)
+  expect(save.biggest?.name).toBe('Bluefin Tuna')
+  expect(rarest(save)).toEqual({ name: 'Golden Trout', rarity: 'legendary' })
+})
+
+test('catch news: record first, then new species, then personal best, else nothing', async () => {
+  const withTuna = recordCatch(EMPTY_SAVE, tuna)
+  expect(catchNews(EMPTY_SAVE, gill)).toMatch(/MegaBite record/)
+  expect(catchNews(withTuna, gill)).toBe('New species: Bluegill (Common)')
+  const withGill = recordCatch(withTuna, gill)
+  expect(catchNews(withGill, { ...gill, id: 'g2', weightLb: 0.5 })).toMatch(/Personal best: Bluegill/)
+  expect(catchNews(withGill, { ...gill, id: 'g3', weightLb: 0.2 })).toBeNull()
+})
+
+test('top keeps the ten heaviest, heaviest first', async () => {
+  let save = EMPTY_SAVE
+  for (let i = 0; i < 12; i++) save = recordCatch(save, { ...gill, id: `g${i}`, weightLb: i + 1 })
+  expect(save.top).toHaveLength(10)
+  expect(save.top[0]?.weightLb).toBe(12)
+  expect(formatTop(save).split('\n')[0]).toContain('(top 10)')
+  expect(formatTop(save).split('\n')[1]).toMatch(/^ +1\. Bluegill/)
+})
+
+test('an older save without a top list gets one from its recent catches', async () => {
+  const older = { ...recordCatch(recordCatch(EMPTY_SAVE, gill), tuna), top: undefined }
+  expect(toSave(older).top.map(one => one.name)).toEqual(['Bluefin Tuna', 'Bluegill'])
+})
+
+test('a size tag is explained the first time it is earned, then never again', async () => {
+  const big = { ...gill, id: 'g9', weightLb: 0.7 }
+  expect(gradeIntro(EMPTY_SAVE, big)?.text).toBe("First TROPHY: at least 2× a typical Bluegill's weight")
+  expect(gradeIntro({ ...EMPTY_SAVE, seenGrades: ['trophy'] }, big)).toBeNull()
+  expect(gradeIntro(EMPTY_SAVE, gill)).toBeNull()
+  expect(formatHelp()).toContain('TROPHY     2× typical or more')
+})
+
+test('catches of species no longer in the game are dropped from an old save', async () => {
+  const ghost = { ...gill, id: 'x1', species: 'regex-eel', name: 'Regex Eel', weightLb: 9 }
+  const old = { ...recordCatch(recordCatch(EMPTY_SAVE, gill), ghost) }
+  const cleaned = toSave(old)
+  expect(cleaned.top.map(one => one.name)).toEqual(['Bluegill'])
+  expect(cleaned.recent.map(one => one.name)).toEqual(['Bluegill'])
+  expect(cleaned.biggest?.name).toBe('Bluegill')
+  expect(Object.keys(cleaned.species)).toEqual(['bluegill'])
+})
+
+test('dropping old fish refills the top list from recent catches and fixes the count', async () => {
+  const ghost = { ...gill, id: 'x1', species: 'regex-eel', name: 'Regex Eel', weightLb: 9 }
+  let save = recordCatch(EMPTY_SAVE, ghost)
+  for (let i = 0; i < 12; i++) save = recordCatch(save, { ...gill, id: `g${i}`, weightLb: 0.1 + i / 100 })
+  // The stored top 10 holds the ghost plus nine bluegills; three more bluegills only sit in recent.
+  const cleaned = toSave(save)
+  expect(cleaned.top).toHaveLength(10)
+  expect(cleaned.top.every(one => one.name === 'Bluegill')).toBe(true)
+  expect(cleaned.totalCaught).toBe(12)
+  expect(Math.abs(cleaned.totalWeightLb - (save.totalWeightLb - 9))).toBeLessThan(0.01)
+  expect(
+    formatRare(cleaned)
+      .split('\n')
+      .every(line => line === line.trimEnd()),
+  ).toBe(true)
+})
+
+test('landing a fish records it, says what is new, and explains a first size tag once', async () => {
+  const hooked: Hooked = {
+    id: 'h1',
+    species: 'largemouth-bass',
+    name: 'Largemouth Bass',
+    rarity: 'common',
+    lengthIn: 22,
+    weightLb: 5,
+    isTrophy: true,
+    difficulty: 0.4,
+  }
+  const first = landFish(EMPTY_SAVE, hooked, '2026-11-11T00:00:00.000Z')
+  expect(first.caught).toEqual({
+    id: 'h1',
+    species: 'largemouth-bass',
+    name: 'Largemouth Bass',
+    rarity: 'common',
+    lengthIn: 22,
+    weightLb: 5,
+    isTrophy: true,
+    caughtAt: '2026-11-11T00:00:00.000Z',
+  })
+  expect(first.isNewSpecies).toBe(true)
+  expect(first.save.totalCaught).toBe(1)
+  expect(first.save.seenGrades).toEqual(['trophy'])
+  expect(first.news).toBe(
+    "MegaBite record: Largemouth Bass, 5.0 lb! · First TROPHY: at least 2× a typical Largemouth Bass's weight",
+  )
+
+  const second = landFish(first.save, { ...hooked, id: 'h2', weightLb: 4.5 }, '2026-11-11T00:01:00.000Z')
+  expect(second.isNewSpecies).toBe(false)
+  expect(second.news).toBe('')
+  expect(second.save.seenGrades).toEqual(['trophy'])
+})
