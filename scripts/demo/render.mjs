@@ -5,8 +5,8 @@ import { simulate } from './sim.mjs'
 const SEED = Number(process.argv[2] ?? 17), OUT = process.argv[3] ?? new URL('../../docs/demo.svg', import.meta.url).pathname
 const { frames, fish, grade } = simulate(SEED)
 const W = 60, CW = 9, LH = 20, FS = 15, DT = 0.1
-const PAD = 20, BAR = 34
-const paneX = PAD, paneY = BAR + PAD + 2 * LH + 8
+const PAD = 12
+const paneX = PAD, paneY = PAD
 const textX = paneX + 2 * CW, textY = paneY + LH
 const width = PAD * 2 + (W + 4) * CW, height = paneY + 7 * LH + PAD
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -21,14 +21,11 @@ const textRun = (seg, col, row) => {
   return `<text x="${x}" y="${y}" textLength="${n * CW}" lengthAdjust="spacingAndGlyphs" fill="${seg.color ?? '#cfd8dc'}"${seg.bold ? ' font-weight="bold"' : ''}>${esc(body)}</text>`
 }
 const bgRun = (seg, col, row) => seg.bg ? `<rect x="${textX + col * CW}" y="${textY + row * LH - 15}" width="${[...seg.text].length * CW}" height="${LH}" fill="${seg.bg}"/>` : ''
-const SPIN = ['✻', '✶', '✳', '✢', '·', '✢', '✳', '✶']
 
 const pieceDefs = new Map()
 const piece = markup => { if (!markup) return ''; if (!pieceDefs.has(markup)) pieceDefs.set(markup, `p${pieceDefs.size}`); return `<use href="#${pieceDefs.get(markup)}"/>` }
 const body = frames.map((f, i) => {
   let out = ''
-  // chat side: prompt and Claude's status
-  const busy = f.accent === undefined ? true : null
   f.rows.forEach((segs, r) => {
     let col = 0, row = ''
     for (const seg of runsOf(cells(segs).map(c => ({ ...c, bg: undefined })))) { row += textRun(seg, col, r); col += [...seg.text].length }
@@ -44,17 +41,11 @@ const body = frames.map((f, i) => {
   return out
 })
 
-// Claude's status line above the pane: working until the done flash starts.
-const doneAt = frames.findIndex(f => f.badge.text.includes('Claude done') || f.badge.text.includes('✓'))
-const status = frames.map((_, i) =>
-  doneAt >= 0 && i >= doneAt
-    ? `<text x="${PAD}" y="${BAR + PAD + LH}" fill="#66bb6a">●</text><text x="${PAD + 2 * CW}" y="${BAR + PAD + LH}" fill="#cfd8dc">Done. All 214 tests pass.</text>`
-    : `<text x="${PAD}" y="${BAR + PAD + LH}" fill="#ff8a65">${SPIN[i % SPIN.length]}</text><text x="${PAD + 2 * CW}" y="${BAR + PAD + LH}" fill="#ff8a65">Working… <tspan fill="#78909c">(${(i * DT).toFixed(0)}s · esc to interrupt)</tspan></text>`)
 
 // Dedupe identical frames into defs; each time slot shows one through a <use>.
 const ids = new Map(), defs = []
 const slots = body.map((b, i) => {
-  const key = piece(status[i]) + b
+  const key = b
   if (!ids.has(key)) { ids.set(key, `f${ids.size}`); defs.push(`<g id="${ids.get(key)}">${key}</g>`) }
   return ids.get(key)
 })
@@ -81,10 +72,6 @@ frames[0].rows.forEach((segs, r) => { let col = 0; for (const seg of runsOf(cell
 const svg = `<svg xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="Menlo, Monaco, Consolas, 'DejaVu Sans Mono', 'Liberation Mono', monospace" font-size="${FS}">
 <style>text{white-space:pre}${css}</style>
 <rect width="${width}" height="${height}" rx="12" fill="#14121f"/>
-<rect width="${width}" height="${BAR}" rx="12" fill="#221e33"/><rect y="${BAR - 12}" width="${width}" height="12" fill="#221e33"/>
-<circle cx="20" cy="17" r="6" fill="#ff5f57"/><circle cx="40" cy="17" r="6" fill="#febc2e"/><circle cx="60" cy="17" r="6" fill="#28c840"/>
-<text x="${width / 2}" y="22" text-anchor="middle" fill="#8a84a8" font-size="13">claude · ~/project</text>
-<text x="${PAD}" y="${BAR + PAD}" fill="#78909c">&gt; <tspan fill="#cfd8dc">fix the flaky parser tests</tspan></text>
 ${water}
 <defs>${[...pieceDefs].map(([m, id]) => `<g id="${id}">${m}</g>`).join('\n')}
 ${defs.join('\n')}</defs>
